@@ -317,7 +317,7 @@ const money=(n,sign=true)=>{
 };
 const moneyShort=n=>{const a=Math.abs(n);const s=a>=1e6?(a/1e6).toFixed(1)+'m':a>=1e3?(a/1e3).toFixed(a>=1e4?0:1)+'k':a.toFixed(0);return (n<0?'−':'')+cur()+s};
 const pct=n=>n==null||!isFinite(n)?'–':(n*100).toFixed(1)+'%';
-const fx=(n,d=2)=>n==null||!isFinite(n)?'–':n.toFixed(d);
+const fx=(n,d=2)=>n==null||!isFinite(n)?'–':(Math.abs(n)<0.5*Math.pow(10,-d)?0:n).toFixed(d);
 const cls=n=>n>0?'pos':n<0?'neg':'';
 const dt=t=>t.date+' '+(t.time||'00:00');
 const byDT=(a,b)=>dt(a)<dt(b)?-1:dt(a)>dt(b)?1:0;
@@ -1070,9 +1070,10 @@ async function prepImage(file){
     const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(bmp,0,0,w,h);
     const b=await new Promise(r=>c.toBlob(r,'image/webp',.88));if(b&&b.size<file.size)return b}catch(e){}
   return file}
-async function addImages(files,{tradeId=null,date=todayStr()}={}){
+async function addImages(files,{tradeId=null,date=todayStr(),auto=false}={}){
   const out=[];for(const f of files){if(!f||!f.type||!f.type.startsWith('image/'))continue;
-    const blob=await prepImage(f);const o={id:uid(),tradeId,date,caption:'',created:Date.now(),blob};
+    let tid=tradeId,dt=date;if(auto&&!tid){const L=autoLinkShot(f.name);if(L){dt=L.date;tid=L.tradeId}}
+    const blob=await prepImage(f);const o={id:uid(),tradeId:tid,date:dt,caption:'',created:Date.now(),blob};
     try{await imgPut(o);S.images.push(o);out.push(o)}catch(e){toast('Could not save image: '+e.message,'err')}}
   if(out.length)toast(`${out.length} screenshot${out.length>1?'s':''} saved`);return out}
 function bindDrop(zone,input,cb){if(!zone)return;
@@ -1144,11 +1145,11 @@ function vGallery(m){
   const f=S.gFilter;let list=S.images.slice();if(f==='linked')list=list.filter(i=>i.tradeId);if(f==='unlinked')list=list.filter(i=>!i.tradeId);
   const [a,b]=rangeBounds(S.filter.range);list=list.filter(i=>i.date>=a&&i.date<=b);
   m.innerHTML=`<div class="head"><h1>Screenshots</h1><div class="row"><div class="seg">${[['all','All'],['linked','Linked to a trade'],['unlinked','Not linked']].map(([v,l])=>`<button data-gf="${v}" class="${f===v?'on':''}">${l}</button>`).join('')}</div></div></div>
-  <div class="stack"><div class="drop" id="g-drop"><strong>Drop chart screenshots here</strong>Or tap to browse. You can also paste from your clipboard anywhere on this page. Images are dated today; open one to change the date or link it to a trade.<input type="file" accept="image/*" multiple hidden id="g-file"></div>
+  <div class="stack"><div class="drop" id="g-drop"><strong>Drop chart screenshots here</strong>Or tap to browse. You can also paste from your clipboard anywhere on this page. TradingView screenshots are dated and linked to the matching trade automatically; others are dated today.<input type="file" accept="image/*" multiple hidden id="g-file"></div>
   ${filterBar()}${list.length?`<div class="thumbs" id="g-thumbs"></div>`:`<p class="muted">No screenshots yet.</p>`}</div>`;
   bindFilters();
   $$('[data-gf]').forEach(bt=>bt.onclick=()=>{S.gFilter=bt.dataset.gf;render(true)});
-  bindDrop($('#g-drop'),$('#g-file'),async files=>{await addImages(files,{date:todayStr()});render(true)});
+  bindDrop($('#g-drop'),$('#g-file'),async files=>{await addImages(files,{date:todayStr(),auto:true});render(true)});
   if(list.length)renderThumbs('#g-thumbs',list);
 }
 
@@ -1260,9 +1261,10 @@ function impBuild(){
 }
 function vImport(m){
   const I=S.imp;
-  let body=`<section class="panel"><div class="drop" id="i-drop"><strong>Drop your broker's CSV here</strong>Or tap to browse. Futures: Tradovate, NinjaTrader, TopstepX/ProjectX CSVs. CFDs: the MT5 history report saved as HTML (Toolbox → History → right-click → Report → HTML). Most generic CSVs work too. Map the columns once and it's remembered.<input type="file" accept=".csv,.txt,.html,.htm,text/csv,text/html" hidden id="i-file"></div>
+  let body=`<section class="panel"><div class="drop" id="i-drop"><strong>Drop your broker's CSV here</strong>Or tap to browse. Futures: TradingView's Tradovate exports (drop Orders, Notifications log and Account info together), Tradovate performance reports, NinjaTrader, TopstepX/ProjectX. CFDs: the MT5 history report saved as HTML (Toolbox → History → right-click → Report → HTML). Most generic CSVs work too. Map the columns once and it's remembered.<input type="file" accept=".csv,.txt,.html,.htm,text/csv,text/html" multiple hidden id="i-file"></div>
     <details style="margin-top:12px"><summary class="muted" style="cursor:pointer">Or paste CSV text</summary><textarea id="i-paste" placeholder="Paste rows including the header line" style="margin-top:8px"></textarea><button class="btn sm" data-act="i-paste" style="margin-top:8px">Read pasted data</button></details>
     <p class="muted small" style="margin:12px 0 0">Need a template? <a href="#" data-act="i-template">Download a blank CSV with the right headers</a>.</p></section>`;
+  if(S.fills)body+=fillsHTML();
   if(I){const items=impBuild();const c={ok:0,warn:0,bad:0,dup:0};items.forEach(x=>c[x.status]++);const imp=c.ok+c.warn;
     const unknown=[...new Set(items.filter(x=>!x.t.known&&x.t.symbol).map(x=>x.raw))];
     const presetSug=[...new Set(unknown.map(r=>matchInst(r,presetObjs())).filter(s=>s&&!instOf(s)))];
@@ -1289,10 +1291,12 @@ function vImport(m){
   body+=`<section class="panel"><h2>Recent imports</h2>${S.imports.length?`<div class="tblwrap"><table class="tbl"><tbody>${S.imports.slice(0,20).map(x=>`<tr><td>${esc(x.file)}</td><td>${new Date(x.at).toLocaleString()}</td><td class="r">${S.trades.filter(t=>t.batch===x.id).length} trades</td><td class="r"><button class="btn sm danger" data-act="i-undo" data-id="${x.id}">Remove these trades</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="muted small">Imports you run show up here, so a bad import can be undone in one click.</p>'}</section>`;
   m.innerHTML=`<div class="head"><h1>Import</h1></div><div class="stack">${body}</div>`;
   bindDrop($('#i-drop'),$('#i-file'),async files=>{const f=files[0];if(!f)return;
+    if(files.some(x=>/\.(csv|txt)$/i.test(x.name))&&await fillsStart(files))return;
     if(/\.xlsx?$/i.test(f.name)){toast('Save it as CSV first, or drop the MT5 HTML report','err');return}
     let t=await readFileText(f);
     if(/\.html?$/i.test(f.name)||/^\s*</.test(t)){const rows=htmlToRows(t);if(!rows){toast('No trade table found in that HTML file','err');return}t=rowsToCSV(rows)}
     impStart(t,f.name)});
+  bindFills();
   $$('[data-map]').forEach(s=>s.onchange=()=>{S.imp.map[s.dataset.map]=s.value===''?null:+s.value;render(true)});
   $$('[data-opt]').forEach(s=>s.onchange=()=>{S.imp.opts[s.dataset.opt]=s.type==='checkbox'?s.checked:s.type==='number'?(num(s.value)||0):s.value;render(true)});
 }
@@ -1304,6 +1308,118 @@ function impGo(){
   ['trades','imports','mappings'].forEach(save);const n=items.length;S.imp=null;
   toast(`Imported ${n} trade${n===1?'':'s'}`);S.view='dashboard';render();
 }
+
+
+/* ================= broker fills -> trades (Tradovate via TradingView) ================= */
+const TS_RE=/(\d{4}-\d{2}-\d{2})T(\d{2})[_:](\d{2})[_:](\d{2})(?:\.(\d+))?Z/;
+function fileStamp(name){const m=TS_RE.exec(name||'');if(!m)return null;return Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}.${(m[5]||'0').padEnd(3,'0').slice(0,3)}Z`)}
+function csvObjects(text){const rows=parseCSV(text);if(!rows.length)return{headers:[],rows:[]};const h=rows[0].map(x=>String(x).trim());
+  return{headers:h,rows:rows.slice(1).map(r=>Object.fromEntries(h.map((k,i)=>[k,r[i]??''])))}}
+function fileKind(h){const n=h.map(normH);
+  if(n.includes('avgfillprice')&&n.includes('orderid'))return 'orders';
+  if(n.includes('title')&&n.includes('text')&&n.includes('time'))return 'notifs';
+  if(n.includes('totalpl')||n.includes('netliq'))return 'account';
+  if(n.includes('netpos')||n.includes('netprice')||(n.includes('symbol')&&h.length<=12&&n.includes('openpl')))return 'positions';
+  return null}
+function tms(s){const m=/(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(String(s||''));
+  if(m)return new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5],+(m[6]||0)).getTime();
+  const d=parseDT(s,'mdy');if(!d)return null;const sec=/:\d{2}:(\d{2})/.exec(String(s));const[h,mi]=(d.time||'00:00').split(':');
+  const x=new Date(d.date+'T00:00:00');x.setHours(+h,+mi,sec?+sec[1]:0);return x.getTime()}
+const hhmm=ms=>{const d=new Date(ms);return pad2(d.getHours())+':'+pad2(d.getMinutes())};
+const NRE=/^(.*?)\s+order\s+(placed|modified|partially executed|executed|filled|cancell?ed|rejected)\s+on\s+(\S+)\s+\((\d+)\)/i;
+const TRE=/^(Buy|Sell)\s+([\d.,]+)(?:\s+at\s+([\d.,]+))?/i;
+function parseGroup(items){
+  const fills=new Map(),stops=new Map(),partial=new Map();let acct=null;
+  for(const it of items){
+    if(it.kind==='notifs')for(const r of it.rows){const m=NRE.exec(r.Title||'');if(!m)continue;const tm=TRE.exec(String(r.Text||'').trim());if(!tm)continue;
+      const type=m[1].trim(),act=m[2].toLowerCase(),sym=(r.Symbol||m[3]).trim(),id=m[4],t=tms(r.Time);const side=tm[1][0].toUpperCase()+tm[1].slice(1).toLowerCase();
+      const qty=num(tm[2]),price=tm[3]!=null?num(tm[3]):null;
+      if(/stop|trail/i.test(type)){const s=stops.get(id)||{id,sym,side,type,ev:[]};s.ev.push({t,price,act});stops.set(id,s)}
+      if(act==='executed'||act==='filled'){const prev=fills.get(id);if(!prev||t>=prev.t)fills.set(id,{id,sym,side,qty,price,t,type,src:'n'})}
+      else if(act==='partially executed'){const p=partial.get(id);if(!p||t>p.t)partial.set(id,{id,sym,side,qty,price,t,type,src:'n'})}}
+    if(it.kind==='orders')for(const r of it.rows){const fq=num(r['Filled Qty']);if(!(fq>0)||!/fill/i.test(r.Status||''))continue;
+      const id=String(r['Order ID']).trim(),o={id,sym:String(r.Symbol).trim(),side:/^b/i.test(r.Side)?'Buy':'Sell',qty:fq,price:num(r['Avg Fill Price']),t:tms(r['Update Time']),type:r.Type,src:'o'};
+      const n=fills.get(id);if(n&&o.t!=null&&Math.abs(n.t-o.t)<120000)o.t=Math.min(n.t,o.t);fills.set(id,o)}
+    if(it.kind==='account'&&it.rows[0]){const r=it.rows[0];acct={totalPL:num(r['Total P/L']),netLiq:num(r['Net Liq'])}}}
+  for(const [id,p] of partial)if(!fills.has(id))fills.set(id,p);
+  for(const s of stops.values())s.ev.sort((a,b)=>a.t-b.t);
+  return{fills:[...fills.values()].filter(f=>f.t!=null&&f.price!=null&&f.qty>0),stops,acct}}
+function buildRoundTrips(fills,stops){
+  const bySym=new Map();for(const f of fills){if(!bySym.has(f.sym))bySym.set(f.sym,[]);bySym.get(f.sym).push(f)}
+  const out=[],open=[];
+  for(const [sym,fs] of bySym){fs.sort((a,b)=>a.t-b.t||String(a.id).localeCompare(String(b.id)));let pos=0,cur=null;
+    for(const f of fs){let q=f.qty;const s=f.side==='Buy'?1:-1;
+      while(q>1e-9){
+        if(pos===0)cur={sym,dir:s,ent:[],ex:[],t0:f.t,t1:null};
+        if(pos===0||Math.sign(pos)===s){cur.ent.push({q,p:f.price});pos+=s*q;q=0}
+        else{const c=Math.min(q,Math.abs(pos));cur.ex.push({q:c,p:f.price});pos+=s*c;q-=c;if(Math.abs(pos)<1e-9){pos=0;cur.t1=f.t;out.push(cur);cur=null}}}}
+    if(cur)open.push(cur)}
+  const vw=a=>a.reduce((s,x)=>s+x.q*x.p,0)/a.reduce((s,x)=>s+x.q,0);
+  return{open,trades:out.map(t=>{const qty=t.ent.reduce((s,x)=>s+x.q,0),entry=vw(t.ent),exit=vw(t.ex);
+    const opp=t.dir>0?'Sell':'Buy',at=t.t0+3000;let best=null;
+    for(const so of stops.values()){if(so.sym!==t.sym||so.side!==opp)continue;const ev=so.ev.filter(e=>e.t<=at);if(!ev.length)continue;
+      if(/cancel|reject|execut|fill/.test(ev[ev.length-1].act))continue;const pr=[...ev].reverse().find(e=>e.price!=null)?.price;if(pr==null)continue;
+      if(t.dir>0?pr>=entry:pr<=entry)continue;const d=Math.abs(entry-pr);if(!best||d<best.d)best={so,pr,d}}
+    let moved=null;if(best){for(const e of best.so.ev){if(e.t<=at||e.t>t.t1||e.price==null||!/modif/.test(e.act))continue;
+      if(t.dir>0?e.price<best.pr-1e-9:e.price>best.pr+1e-9)moved=moved==null?e.price:(t.dir>0?Math.min(moved,e.price):Math.max(moved,e.price))}}
+    return{rawSym:t.sym,side:t.dir>0?'Long':'Short',qty,entry:+entry.toFixed(6),exit:+exit.toFixed(6),t0:t.t0,t1:t.t1,stop:best?best.pr:null,moved,scaled:t.ent.length>1||t.ex.length>1}})}}
+async function fillsStart(files){
+  const items=[];const skipped=[];
+  for(const f of files){if(!/\.(csv|txt)$/i.test(f.name)){skipped.push(f.name);continue}
+    const {headers,rows}=csvObjects(await readFileText(f));const kind=fileKind(headers);
+    if(!kind){skipped.push(f.name);continue}if(kind==='positions')continue;items.push({name:f.name,kind,rows,stamp:fileStamp(f.name)})}
+  if(!items.some(i=>i.kind==='orders'||i.kind==='notifs'))return false;
+  items.sort((a,b)=>(a.stamp??Infinity)-(b.stamp??Infinity));const groups=[];
+  for(const it of items){const g=groups[groups.length-1];
+    if(g&&it.stamp!=null&&g.stamp!=null&&it.stamp-g.last<3000){g.items.push(it);g.last=it.stamp}
+    else groups.push({stamp:it.stamp,last:it.stamp,items:[it]})}
+  S.fills={groups:groups.map(g=>{const p=parseGroup(g.items);const r=buildRoundTrips(p.fills,p.stops);
+    return{stamp:g.stamp,files:g.items.map(i=>i.name),acct:p.acct,trades:r.trades,open:r.open,account:'',nFills:p.fills.length}})};
+  S.imp=null;if(skipped.length)toast(`Skipped ${skipped.length} file${skipped.length>1?'s':''} that aren't Tradovate exports`);
+  render(true);return true}
+function fillsTrade(x,account){
+  const sym=matchInst(x.rawSym,S.instruments)||x.rawSym;const mis=[];
+  if(x.moved!=null){const tag=S.settings.mistakes.find(m=>/moved\s*stop/i.test(m))||'Moved stop';mis.push(tag)}
+  const notes=['Imported from Tradovate.',x.stop!=null?`Initial stop ${x.stop}.`:'No stop found in the export.',x.moved!=null?`Stop moved past its original level to ${x.moved}.`:'',x.scaled?'Scaled in or out; prices are averages.':''].filter(Boolean).join(' ');
+  const t={id:uid(),date:ymd(new Date(x.t0)),time:hhmm(x.t0),exitTime:hhmm(x.t1),symbol:sym,side:x.side,qty:x.qty,entry:x.entry,exit:x.exit,stop:x.stop,
+    fees:null,grossManual:null,riskManual:null,setup:'',account:account||'',mistakes:mis,rating:null,notes,created:Date.now()};
+  t.importKey=['fills',account||'',x.rawSym,x.t0,x.entry,x.qty,x.side].join('|');return computeTrade(t)}
+function fillsItems(){const existing=new Set(S.trades.map(t=>t.importKey).filter(Boolean));
+  return S.fills.groups.map(g=>g.trades.map(x=>{const t=fillsTrade(x,g.account);let status='ok',msg='Ready';
+    if(existing.has(t.importKey)){status='dup';msg='Already imported'}
+    else if(!t.known){status='bad';msg=`Add ${matchInst(x.rawSym,presetObjs())||x.rawSym} first`}
+    else if(x.moved!=null){status='warn';msg='Ready, stop was moved'}
+    return{t,x,status,msg}}))}
+function fillsHTML(){
+  const G=fillsItems();let ready=0;G.flat().forEach(i=>{if(i.status==='ok'||i.status==='warn')ready++});
+  const need=[...new Set(G.flat().filter(i=>!i.t.known).map(i=>matchInst(i.x.rawSym,presetObjs())).filter(s=>s&&!instOf(s)))];
+  return `<section class="panel"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Orders matched into trades</h2><span class="muted small">Entries and exits are paired up. Your first stop on each trade sets its R, and a stop moved further away is tagged as a mistake.</span></div>
+  ${need.length?`<div class="row" style="margin-top:12px"><span class="small">Add these contracts first:</span>${need.map(s=>`<button class="btn sm pri" data-act="i-addpreset" data-s="${s}">Add ${s}</button>`).join('')}</div>`:''}
+  <datalist id="dl-accts">${accountNames().map(a=>`<option value="${esc(a)}">`).join('')}</datalist>
+  ${S.fills.groups.map((g,gi)=>{const it=G[gi];const sumNet=it.reduce((s,i)=>s+i.t.pnl,0),sumGross=it.reduce((s,i)=>s+i.t.gross,0),cts=it.reduce((s,i)=>s+i.t.qty,0);
+    let rec='';if(g.acct&&g.acct.totalPL!=null&&it.length&&it.every(i=>i.t.known)){const diff=round2(sumNet-g.acct.totalPL);
+      if(Math.abs(diff)<0.01)rec=`<p class="small pos" style="margin:8px 0 0">Matches Tradovate's P&amp;L for this account (${money(g.acct.totalPL)}).</p>`;
+      else{const fees=round2(sumGross-g.acct.totalPL),per=cts?Math.round(fees/(2*cts)*100)/100:null;const syms=[...new Set(it.map(i=>i.t.symbol))];
+        rec=`<p class="small" style="margin:8px 0 0">Tradovate says this account made <b>${money(g.acct.totalPL)}</b>. These trades come to <b>${money(sumNet)}</b>. ${per>0&&syms.length===1?`The gap fits fees of ${money(per,false)} per contract per side. <button class="btn sm" data-act="fills-comm" data-s="${esc(syms[0])}" data-v="${per}">Set ${esc(syms[0])} commission to ${money(per,false)}</button>`:'Check your contract commission in Settings.'}</p>`}}
+    return `<div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
+     <div class="row" style="justify-content:space-between"><div><b>${g.stamp?`Export at ${esc(new Date(g.stamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}))}`:'Export'}</b> <span class="muted small">${g.acct&&g.acct.netLiq!=null?`Balance ${money(g.acct.netLiq,false)}, `:''}${plural(g.trades.length,'trade')}${g.open.length?`, ${g.open.length} still open (skipped)`:''}</span></div>
+      <label class="f" style="grid-auto-flow:column;align-items:center;gap:8px">Account <input list="dl-accts" data-facct="${gi}" value="${esc(g.account)}" placeholder="e.g. Apex 50k #1" style="width:180px"></label></div>
+     ${rec}
+     ${it.length?`<div class="tblwrap" style="margin-top:10px"><table class="tbl"><thead><tr><th>Status</th><th>Date</th><th>In</th><th>Out</th><th>Contract</th><th>Side</th><th class="r">Size</th><th class="r">Entry</th><th class="r">Exit</th><th class="r">First stop</th><th class="r">R</th><th class="r">Net P&amp;L</th></tr></thead><tbody>
+     ${it.map(i=>`<tr><td><span class="status ${i.status==='dup'?'warn':i.status}">${esc(i.msg)}</span></td><td>${esc(i.t.date)}</td><td>${esc(i.t.time)}</td><td>${esc(i.t.exitTime)}</td><td>${esc(i.t.symbol)}</td><td><span class="tag ${i.t.side==='Long'?'long':'short'}">${i.t.side}</span></td><td class="r">${i.t.qty}</td><td class="r">${i.t.entry}</td><td class="r">${i.t.exit}</td><td class="r">${i.t.stop??'–'}${i.x.moved!=null?` <span class="neg" title="Moved to ${i.x.moved}">→${i.x.moved}</span>`:''}</td><td class="r ${cls(i.t.r)}">${i.t.r!=null?fx(i.t.r)+'R':''}</td><td class="r ${cls(i.t.pnl)}">${money(i.t.pnl)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted small">No completed trades in these files.</p>'}
+    </div>`}).join('')}
+  <div class="row" style="margin-top:16px"><span class="muted small">Tip: export Orders, Notifications log and Account info together for each account, then drop them all at once.</span><span class="spacer"></span><button class="btn" data-act="fills-cancel">Cancel</button><button class="btn pri" data-act="fills-go" ${ready?'':'disabled'}>Import ${plural(ready,'trade')}</button></div></section>`}
+function bindFills(){$$('[data-facct]').forEach(el=>el.onchange=()=>{S.fills.groups[+el.dataset.facct].account=el.value.trim();render(true)})}
+function fillsGo(){
+  const G=fillsItems();const batch=uid();let n=0;
+  G.forEach(it=>it.forEach(i=>{if(i.status!=='ok'&&i.status!=='warn')return;i.t.batch=batch;S.trades.push(i.t);n++;
+    for(const m of i.t.mistakes)if(!S.settings.mistakes.includes(m)){S.settings.mistakes.push(m);save('settings')}}));
+  if(!n)return;S.imports.unshift({id:batch,file:`Tradovate orders (${S.fills.groups.length} export${S.fills.groups.length>1?'s':''})`,count:n,at:Date.now()});
+  ['trades','imports'].forEach(save);S.fills=null;toast(`Imported ${plural(n,'trade')}`);S.view='dashboard';render()}
+function autoLinkShot(name){const m=/^([A-Z0-9!._-]+?)_(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})/i.exec(name||'');if(!m)return null;
+  const date=m[2],time=`${m[3]}:${m[4]}`,sym=matchInst(m[1],S.instruments);
+  const c=S.trades.filter(t=>t.date===date&&(!sym||t.symbol===sym)&&(t.time||'')<=time).sort(byDT);
+  return{date,tradeId:c.length?c[c.length-1].id:null}}
 
 /* ================= settings ================= */
 function instSection(){
@@ -1547,6 +1663,8 @@ const ACT={
   'i-paste':()=>{const t=$('#i-paste').value;if(t.trim())impStart(t,'Pasted data')},
   'i-template':()=>download('ledger-template.csv','Date,Time,Exit Time,Symbol,Side,Qty,Entry,Exit,Stop,PnL,Fees,Account,Setup,Notes\n','text/csv'),
   'i-cancel':()=>{S.imp=null;render(true)},
+  'fills-cancel':()=>{S.fills=null;render(true)},'fills-go':()=>fillsGo(),
+  'fills-comm':a=>{const i=instOf(a.dataset.s);if(!i)return;i.commission=+a.dataset.v;recomputeAll();save('instruments');save('trades');toast(`${i.sym} commission set to ${money(+a.dataset.v,false)} per side`);render(true)},
   'i-go':()=>impGo(),
   'i-addpreset':a=>{if(CFD_PRESETS.some(p=>p[0]===a.dataset.s))addCfd(a.dataset.s);else addPreset(a.dataset.s);render(true)},
   'i-undo':a=>{const id=a.dataset.id;const n=S.trades.filter(t=>t.batch===id).length;if(!confirm(`Remove the ${n} trades from this import?`))return;S.trades=S.trades.filter(t=>t.batch!==id);S.imports=S.imports.filter(x=>x.id!==id);save('trades');save('imports');render(true);toast(`Removed ${n} trades`)},
@@ -1588,7 +1706,7 @@ document.addEventListener('paste',async e=>{
   const files=[...(e.clipboardData?.files||[])].filter(f=>f.type.startsWith('image/'));if(!files.length)return;e.preventDefault();
   if(modalCtx){const date=$('#tf [name=date]')?.value||modalCtx.date;await addImages(files,{tradeId:modalCtx.id,date});renderThumbs('#tf-thumbs',S.images.filter(i=>i.tradeId===modalCtx.id));return}
   if(S.view==='journal'){await addImages(files,{date:S.jDate});renderThumbs('#j-thumbs',S.images.filter(i=>i.date===S.jDate));return}
-  await addImages(files,{date:todayStr()});if(S.view==='gallery')render(true);else toast('Pasted screenshot saved to Screenshots')});
+  await addImages(files,{date:todayStr(),auto:true});if(S.view==='gallery')render(true);else toast('Pasted screenshot saved to Screenshots')});
 window.addEventListener('dragover',e=>e.preventDefault());window.addEventListener('drop',e=>e.preventDefault());
 let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(S.view==='dashboard'&&S.trades.length){const ts=filtered();if(ts.length)drawDash(analyze(ts))}},150)});
 
