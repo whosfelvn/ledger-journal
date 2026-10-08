@@ -358,7 +358,7 @@ const DEFAULT_SETTINGS={
   mistakes:['FOMO entry','Moved stop','Oversized','Outside kill zone','Revenge trade','Early exit','No HTF bias'],
   rules:['Traded only in my kill zones','HTF bias marked before the open','Risk per trade within my limit','Stopped after daily max loss'],
   sessions:[{name:'Asia',start:'00:00',end:'06:00'},{name:'London',start:'07:00',end:'10:00'},{name:'New York',start:'12:00',end:'15:00'}],
-  motivation:{enabled:true,lossStreak:2,redDays:2,ddMin:0,rule:'Half size. A+ setups only. Stop after two losses.',custom:[]},
+  motivation:{enabled:true,lossStreak:2,redDays:2,ddMin:0,ddBase:'start',rule:'Half size. A+ setups only. Stop after two losses.',custom:[]},
   ror:{ruin:null,target:null,unit:'trade'},
   game:{enabled:true,maxTrades:3,maxLoss:null,sizeTol:1.5},
 };
@@ -449,11 +449,11 @@ const round2=n=>Math.round(n*100)/100;
 function recomputeAll(){S.trades.forEach(computeTrade)}
 
 /* ================= analytics ================= */
-function analyze(list){
-  const ts=[...list].sort(byDT);
+function analyze(list,base){
+  const ts=[...list].sort(byDT);const eq0=base?.eq0||0,pk0=base?.peak0!=null?Math.max(base.peak0,eq0):eq0;
   const A={n:ts.length,net:0,gw:0,gl:0,w:0,l:0,be:0,fees:0,curve:[],maxDD:0,curDD:0,peak:0,largestW:0,largestL:0,
     maxWS:0,maxLS:0,curStreak:0,maxWDS:0,maxLDS:0,curDayStreak:0,rSum:0,rN:0,holdW:[],holdL:[],days:[],ts};
-  let eq=0,peak=0,ws=0,ls=0;
+  let eq=eq0,peak=pk0,ws=0,ls=0;A.eq0=eq0;A.peak0=pk0;A.maxDD=pk0-eq0;
   for(const t of ts){const p=t.pnl||0;eq+=p;A.net+=p;A.fees+=t.feesR||0;
     if(p>0){A.w++;A.gw+=p;ws++;ls=0;A.largestW=Math.max(A.largestW,p);if(t.hold!=null)A.holdW.push(t.hold)}
     else if(p<0){A.l++;A.gl+=p;ls++;ws=0;A.largestL=Math.min(A.largestL,p);if(t.hold!=null)A.holdL.push(t.hold)}
@@ -463,7 +463,7 @@ function analyze(list){
     if(t.r!=null){A.rSum+=t.r;A.rN++}
     A.curve.push({eq,dd,t});
   }
-  A.peak=peak;A.curDD=peak-eq;A.curStreak=ws>0?ws:-ls;
+  A.peak=peak;A.curDD=peak-eq;A.endEq=eq;A.based=!!base?.on;A.curStreak=ws>0?ws:-ls;
   const dm=new Map();
   for(const t of ts){const d=dm.get(t.date)||{date:t.date,pnl:0,n:0,w:0,l:0};d.pnl+=t.pnl;d.n++;if(t.pnl>0)d.w++;else if(t.pnl<0)d.l++;dm.set(t.date,d)}
   A.days=[...dm.values()].sort((a,b)=>a.date<b.date?-1:1);
@@ -537,7 +537,7 @@ function niceTicks(min,max,count=4){const span=max-min||1;const step0=span/count
   const step=[1,2,2.5,5,10].map(m=>m*mag).find(s=>span/s<=count+1)||mag*10;const out=[];for(let v=Math.ceil(min/step)*step;v<=max+1e-9;v+=step)out.push(v);return out}
 function equityChart(el,A){
   const w=Math.max(280,el.clientWidth);const mobile=w<520;const h=mobile?230:300;const ddH=mobile?44:62;
-  const P={l:mobile?44:58,r:10,t:10,b:20};const pts=[{eq:0,dd:0,t:null},...A.curve];const n=pts.length-1;
+  const P={l:mobile?44:58,r:10,t:10,b:20};const pts=[{eq:A.eq0||0,dd:(A.peak0||0)-(A.eq0||0),t:null},...A.curve];const n=pts.length-1;
   const vals=pts.map(p=>p.eq);let min=Math.min(...vals),max=Math.max(...vals);if(min===max){min-=1;max+=1}
   const padv=(max-min)*.06;min-=padv;max+=padv;
   const iw=w-P.l-P.r,ih=h-P.t-P.b-ddH-12;const X=k=>P.l+(n?k/n*iw:0);const Y=v=>P.t+(max-v)/(max-min)*ih;
@@ -606,6 +606,15 @@ function filterBar(){const f=S.filter;
 function bindFilters(){
   [['#f-from','from'],['#f-to','to'],['#f-mkt','market'],['#f-acct','account'],['#f-sym','symbol'],['#f-setup','setup']].forEach(([sel,k])=>{const el=$(sel);if(el)el.onchange=()=>{S.filter[k]=el.value;render(true)}})}
 
+/* ================= starting point ================= */
+function baseFor(f=S.filter){
+  if(f.symbol||f.setup||f.market)return null;
+  const accs=f.account?S.accounts.filter(a=>a.name===f.account):S.accounts;
+  let eq=0,peak=0,on=false;for(const a of accs){if(a.prior!=null&&a.prior!==''){on=true}const P=acctPrior(a);eq+=P.prior;peak+=P.peakBal-P.start}
+  const [from]=rangeBounds(f.range);
+  if(from>'0000-00-00'){for(const t of S.trades.filter(t=>t.date<from&&(!f.account||t.account===f.account)).sort(byDT)){eq+=t.pnl;peak=Math.max(peak,eq)}}
+  return{eq0:round2(eq),peak0:round2(Math.max(peak,eq)),on}}
+
 /* ================= motivation ================= */
 const MESSAGES=[
   "Drawdowns are the entry fee. Today's job is one clean execution, not winning it all back.",
@@ -629,32 +638,32 @@ const MESSAGES=[
 ];
 function motivation(){
   const m=S.settings.motivation;if(!m.enabled||!S.trades.length||S.motiveHidden===todayStr())return '';
-  const A=analyze(S.trades);const ls=A.curStreak<0?-A.curStreak:0,rd=A.curDayStreak<0?-A.curDayStreak:0;const why=[];
+  const A=analyze(S.trades,baseFor({range:'all'}));const rd=A.curDayStreak<0?-A.curDayStreak:0;const why=[];
+  const seen=new Map();for(const t of [...S.trades].sort(byDT)){const k=t.time?`${t.date}|${t.time}|${t.symbol}|${t.side}`:t.id;const p=seen.get(k);seen.set(k,(p||0)+t.pnl)}
+  let ls=0;for(const v of seen.values()){if(v<0)ls++;else if(v>0)ls=0}
   if(m.lossStreak>0&&ls>=m.lossStreak)why.push(`${ls} losing trades in a row`);
   if(m.redDays>0&&rd>=m.redDays)why.push(`${rd} red days in a row`);
-  if(A.curDD>0&&A.curDD>=(+m.ddMin||0))why.push(`${money(-A.curDD)} below your equity peak`);
+  const ddOn=m.ddBase==='peak'?A.curDD>0:A.endEq<0;
+  if(ddOn&&A.curDD>=(+m.ddMin||0))why.push(m.ddBase==='peak'?`${money(-A.curDD)} below your equity peak`:`${money(A.endEq)} overall`);
   if(!why.length)return '';
+  const ctx=A.endEq>0?` Overall you're still ${money(A.endEq)}${A.curDD>0?`, ${money(A.curDD,false)} off your high`:''}.`:'';
   const pool=[...MESSAGES,...(m.custom||[])].filter(Boolean);const msg=pool[hashStr(todayStr())%pool.length];
-  return `<div class="motive" role="status"><span class="bar"></span><div><div class="msg">${esc(msg)}</div><div class="ctx">You're ${why.join(' and ')}.</div>${m.rule?`<div class="rule"><b>Today's rule:</b> ${esc(m.rule)}</div>`:''}</div><button class="x" data-act="hide-motive" aria-label="Hide for today" title="Hide for today">×</button></div>`;
+  return `<div class="motive" role="status"><span class="bar"></span><div><div class="msg">${esc(msg)}</div><div class="ctx">You're ${why.join(' and ')}.${ctx}</div>${m.rule?`<div class="rule"><b>Today's rule:</b> ${esc(m.rule)}</div>`:''}</div><button class="x" data-act="hide-motive" aria-label="Hide for today" title="Hide for today">×</button></div>`;
 }
 
 /* ================= prop accounts ================= */
 function propPanel(){
   const accs=S.accounts.filter(a=>+a.start>0);if(!accs.length)return '';const today=todayStr();
-  const cards=accs.map(a=>{const ts=S.trades.filter(t=>t.account===a.name).sort(byDT);const start=+a.start;let bal=start,peak=start;
-    for(const t of ts){bal+=t.pnl;peak=Math.max(peak,bal)}
-    const mdd=+a.maxDD||0;let floor=null;
-    if(mdd)floor=a.ddType==='trailing'?(a.lock!==false?Math.min(peak-mdd,start):peak-mdd):start-mdd;
-    const room=floor!=null?bal-floor:null;const todayP=ts.filter(t=>t.date===today).reduce((s,t)=>s+t.pnl,0);
+  const cards=accs.map(a=>{const ts=S.trades.filter(t=>t.account===a.name).sort(byDT);const st=acctState(a);const start=st.start,bal=st.bal,mdd=st.mdd,floor=st.floor,room=st.room;const prior=+a.prior||0;const todayP=ts.filter(t=>t.date===today).reduce((s,t)=>s+t.pnl,0);
     const dl=+a.daily||0;const dRoom=dl?dl+todayP:null;const tgt=+a.target||0;const prog=tgt?(bal-start)/tgt:null;
     const meter=(v,maxv,col)=>`<div class="meter"><i style="width:${Math.max(0,Math.min(100,v/maxv*100))}%;background:${col}"></i></div>`;
     const ddCol=room!=null&&room<mdd*.3?'var(--loss)':'var(--win)';
     return `<div class="panel"><div class="row" style="justify-content:space-between"><h3 style="margin:0">${esc(a.name)}</h3><span class="muted small">${esc(a.firm||'')}</span></div>
-      <div style="font-size:24px;font-weight:700;font-stretch:112%;margin:6px 0 2px">${money(bal,false)}</div><div class="small ${cls(bal-start)}">${money(bal-start)} since start</div>
+      <div style="font-size:24px;font-weight:700;font-stretch:112%;margin:6px 0 2px">${money(bal,false)}</div><div class="small ${cls(bal-start)}">${money(bal-start)} since start${prior?` <span class="muted">(${money(prior)} before the journal)</span>`:''}</div>
       ${room!=null?`<div class="small" style="margin-top:12px">Room to max drawdown: <b>${money(room,false)}</b> <span class="muted">(floor ${money(floor,false)})</span></div>${meter(room,mdd,ddCol)}`:''}
       ${dRoom!=null?`<div class="small" style="margin-top:8px">Room to daily loss limit today: <b class="${dRoom<dl*.3?'neg':''}">${money(dRoom,false)}</b></div>${meter(dRoom,dl,dRoom<dl*.3?'var(--loss)':'var(--accent)')}`:''}
       ${prog!=null?`<div class="small" style="margin-top:8px">Profit target: <b>${pct(prog)}</b> of ${money(tgt,false)}</div>${meter(Math.max(0,prog),1,'var(--accent)')}`:''}</div>`}).join('');
-  return `<section><div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">Prop accounts</h2><span class="muted small">From closed trades only. Unrealised intraday swings aren't tracked.</span></div><div class="split3">${cards}</div></section>`;
+  return `<section><div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">Prop accounts</h2><span class="muted small">From closed trades plus each account's balance before the journal. Unrealised intraday swings aren't tracked.</span></div><div class="split3">${cards}</div></section>`;
 }
 
 /* ================= dashboard ================= */
@@ -666,7 +675,7 @@ function emptyState(){
 function ledgerCell(k,v,s,c=''){return `<div><div class="k">${k}</div><div class="v ${c}">${v}</div><div class="s">${s||'&nbsp;'}</div></div>`}
 function vDash(m){
   if(!S.trades.length){m.innerHTML=`<div class="head"><h1>Dashboard</h1></div>${emptyState()}`;return}
-  const ts=filtered();const A=analyze(ts);const G=S.settings.game.enabled?gameState():null;
+  const ts=filtered();const A=analyze(ts,baseFor());const G=S.settings.game.enabled?gameState():null;
   let body;
   if(!ts.length)body=`<div class="panel empty"><p>No trades match these filters.</p><button class="btn" data-act="range" data-v="all">Show all trades</button></div>`;
   else{
@@ -675,7 +684,7 @@ function vDash(m){
     const ctx=dayContext(ts);
     body=`<div class="stack">
     <section class="panel hero"><div class="hero-top"><div><div class="muted small">Net P&amp;L</div><div class="big ${cls(A.net)}">${money(A.net)}</div>
-      <div class="meta">${A.n} trades over ${A.days.length} days, ${esc(span)}</div></div>
+      <div class="meta">${A.n} trades over ${A.days.length} days, ${esc(span)}</div>${A.based?`<div class="meta">Account P&amp;L including before the journal: <b class="${cls(A.endEq)}">${money(A.endEq)}</b></div>`:''}</div>
       <div class="muted small" style="text-align:right">Equity curve with drawdown below</div></div><div class="chart" id="eq"></div></section>
     <div class="ledger">
       ${ledgerCell('Win rate',pct(A.winRate),A.breakevenWR!=null?`Break-even at ${pct(A.breakevenWR)} with your payoff`:`${A.w} wins, ${A.l} losses`)}
@@ -743,7 +752,8 @@ function calendarHTML(A){
 
 
 /* ================= risk of ruin ================= */
-function acctState(a){const ts=S.trades.filter(t=>t.account===a.name).sort(byDT);const start=+a.start||0;let bal=start,peak=start;
+function acctPrior(a){const start=+a.start||0,prior=+a.prior||0;const peakBal=a.peakBal!=null&&a.peakBal!==''?+a.peakBal:start+Math.max(prior,0);return{start,prior,peakBal:Math.max(peakBal,start+prior)}}
+function acctState(a){const ts=S.trades.filter(t=>t.account===a.name).sort(byDT);const P=acctPrior(a);const start=P.start;let bal=start+P.prior,peak=P.peakBal;
   for(const t of ts){bal+=t.pnl;peak=Math.max(peak,bal)}const mdd=+a.maxDD||0;let floor=null;
   if(mdd)floor=a.ddType==='trailing'?(a.lock!==false?Math.min(peak-mdd,start):peak-mdd):start-mdd;
   return{start,bal,peak,mdd,floor,room:floor!=null?bal-floor:null}}
@@ -1340,7 +1350,7 @@ function parseGroup(items){
     if(it.kind==='orders')for(const r of it.rows){const fq=num(r['Filled Qty']);if(!(fq>0)||!/fill/i.test(r.Status||''))continue;
       const id=String(r['Order ID']).trim(),o={id,sym:String(r.Symbol).trim(),side:/^b/i.test(r.Side)?'Buy':'Sell',qty:fq,price:num(r['Avg Fill Price']),t:tms(r['Update Time']),type:r.Type,src:'o'};
       const n=fills.get(id);if(n&&o.t!=null&&Math.abs(n.t-o.t)<120000)o.t=Math.min(n.t,o.t);fills.set(id,o)}
-    if(it.kind==='account'&&it.rows[0]){const r=it.rows[0];acct={totalPL:num(r['Total P/L']),netLiq:num(r['Net Liq'])}}}
+    if(it.kind==='account'&&it.rows[0]){const r=it.rows[0];acct={totalPL:num(r['Total P/L']),netLiq:num(r['Net Liq']),openPL:num(r['Open P/L'])||0}}}
   for(const [id,p] of partial)if(!fills.has(id))fills.set(id,p);
   for(const s of stops.values())s.ev.sort((a,b)=>a.t-b.t);
   return{fills:[...fills.values()].filter(f=>f.t!=null&&f.price!=null&&f.qty>0),stops,acct}}
@@ -1403,19 +1413,31 @@ function fillsHTML(){
         rec=`<p class="small" style="margin:8px 0 0">Tradovate says this account made <b>${money(g.acct.totalPL)}</b>. These trades come to <b>${money(sumNet)}</b>. ${per>0&&syms.length===1?`The gap fits fees of ${money(per,false)} per contract per side. <button class="btn sm" data-act="fills-comm" data-s="${esc(syms[0])}" data-v="${per}">Set ${esc(syms[0])} commission to ${money(per,false)}</button>`:'Check your contract commission in Settings.'}</p>`}}
     return `<div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
      <div class="row" style="justify-content:space-between"><div><b>${g.stamp?`Export at ${esc(new Date(g.stamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}))}`:'Export'}</b> <span class="muted small">${g.acct&&g.acct.netLiq!=null?`Balance ${money(g.acct.netLiq,false)}, `:''}${plural(g.trades.length,'trade')}${g.open.length?`, ${g.open.length} still open (skipped)`:''}</span></div>
-      <label class="f" style="grid-auto-flow:column;align-items:center;gap:8px">Account <input list="dl-accts" data-facct="${gi}" value="${esc(g.account)}" placeholder="e.g. Apex 50k #1" style="width:180px"></label></div>
+      <div class="row"><label class="f" style="grid-auto-flow:column;align-items:center;gap:8px">Account <input list="dl-accts" data-facct="${gi}" value="${esc(g.account)}" placeholder="e.g. Apex 50k #1" style="width:180px"></label>
+      ${g.acct&&g.acct.netLiq!=null?`<label class="f" style="grid-auto-flow:column;align-items:center;gap:8px" title="Used to count the profit you made before this journal">Account size <input type="number" step="any" data-fsize="${gi}" value="${g.size??guessSize(g.acct.netLiq)}" style="width:110px"></label>`:''}</div></div>
      ${rec}
      ${it.length?`<div class="tblwrap" style="margin-top:10px"><table class="tbl"><thead><tr><th>Status</th><th>Date</th><th>In</th><th>Out</th><th>Contract</th><th>Side</th><th class="r">Size</th><th class="r">Entry</th><th class="r">Exit</th><th class="r">First stop</th><th class="r">R</th><th class="r">Net P&amp;L</th></tr></thead><tbody>
      ${it.map(i=>`<tr><td><span class="status ${i.status==='dup'?'warn':i.status}">${esc(i.msg)}</span></td><td>${esc(i.t.date)}</td><td>${esc(i.t.time)}</td><td>${esc(i.t.exitTime)}</td><td>${esc(i.t.symbol)}</td><td><span class="tag ${i.t.side==='Long'?'long':'short'}">${i.t.side}</span></td><td class="r">${i.t.qty}</td><td class="r">${i.t.entry}</td><td class="r">${i.t.exit}</td><td class="r">${i.t.stop??'–'}${i.x.moved!=null?` <span class="neg" title="Moved to ${i.x.moved}">→${i.x.moved}</span>`:''}</td><td class="r ${cls(i.t.r)}">${i.t.r!=null?fx(i.t.r)+'R':''}</td><td class="r ${cls(i.t.pnl)}">${money(i.t.pnl)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted small">No completed trades in these files.</p>'}
     </div>`}).join('')}
-  <div class="row" style="margin-top:16px"><span class="muted small">Tip: export Orders, Notifications log and Account info together for each account, then drop them all at once.</span><span class="spacer"></span><button class="btn" data-act="fills-cancel">Cancel</button><button class="btn pri" data-act="fills-go" ${ready?'':'disabled'}>Import ${plural(ready,'trade')}</button></div></section>`}
-function bindFills(){$$('[data-facct]').forEach(el=>el.onchange=()=>{S.fills.groups[+el.dataset.facct].account=el.value.trim();render(true)})}
+  ${(()=>{const sync=S.fills.groups.filter(g=>g.account&&g.acct&&g.acct.netLiq!=null).length;S.fills.canSync=sync;
+  return `<div class="row" style="margin-top:16px"><span class="muted small">Tip: export Orders, Notifications log and Account info together for each account, then drop them all at once.${sync?` Balances are synced from Account info so drawdown is measured from your real starting point.`:''}</span><span class="spacer"></span><button class="btn" data-act="fills-cancel">Cancel</button><button class="btn pri" data-act="fills-go" ${ready||sync?'':'disabled'}>${ready?`Import ${plural(ready,'trade')}`:'Update balances'}${ready&&sync?' and update balances':''}</button></div></section>`})()}`}
+const SIZES=[5000,10000,25000,50000,75000,100000,150000,200000,250000,300000];
+const guessSize=v=>SIZES.reduce((b,s)=>Math.abs(s-v)<Math.abs(b-v)?s:b,SIZES[0]);
+function bindFills(){$$('[data-facct]').forEach(el=>el.onchange=()=>{const g=S.fills.groups[+el.dataset.facct];g.account=el.value.trim();const a=S.accounts.find(x=>x.name===g.account);if(a&&+a.start>0)g.size=+a.start;render(true)});
+  $$('[data-fsize]').forEach(el=>el.onchange=()=>{S.fills.groups[+el.dataset.fsize].size=num(el.value);render(true)})}
 function fillsGo(){
   const G=fillsItems();const batch=uid();let n=0;
   G.forEach(it=>it.forEach(i=>{if(i.status!=='ok'&&i.status!=='warn')return;i.t.batch=batch;S.trades.push(i.t);n++;
     for(const m of i.t.mistakes)if(!S.settings.mistakes.includes(m)){S.settings.mistakes.push(m);save('settings')}}));
-  if(!n)return;S.imports.unshift({id:batch,file:`Tradovate orders (${S.fills.groups.length} export${S.fills.groups.length>1?'s':''})`,count:n,at:Date.now()});
-  ['trades','imports'].forEach(save);S.fills=null;toast(`Imported ${plural(n,'trade')}`);S.view='dashboard';render()}
+  let synced=0;
+  for(const g of S.fills.groups){if(!g.account||!g.acct||g.acct.netLiq==null)continue;const size=g.size??guessSize(g.acct.netLiq);
+    let a=S.accounts.find(x=>x.name===g.account);if(!a){a={id:uid(),name:g.account,firm:'',start:size,daily:null,maxDD:null,ddType:'trailing',lock:true,target:null};S.accounts.push(a)}
+    if(!(+a.start>0))a.start=size;const jn=S.trades.filter(t=>t.account===a.name).reduce((s,t)=>s+t.pnl,0);
+    a.prior=round2(g.acct.netLiq-(g.acct.openPL||0)-(+a.start)-jn);synced++}
+  if(synced)save('accounts');
+  if(!n){if(synced){S.fills=null;toast(`Balances updated for ${plural(synced,'account')}`);S.view='dashboard';render()}return}
+  S.imports.unshift({id:batch,file:`Tradovate orders (${S.fills.groups.length} export${S.fills.groups.length>1?'s':''})`,count:n,at:Date.now()});
+  ['trades','imports'].forEach(save);S.fills=null;toast(`Imported ${plural(n,'trade')}${synced?`, balances updated for ${plural(synced,'account')}`:''}`);S.view='dashboard';render()}
 function autoLinkShot(name){const m=/^([A-Z0-9!._-]+?)_(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})/i.exec(name||'');if(!m)return null;
   const date=m[2],time=`${m[3]}:${m[4]}`,sym=matchInst(m[1],S.instruments);
   const c=S.trades.filter(t=>t.date===date&&(!sym||t.symbol===sym)&&(t.time||'')<=time).sort(byDT);
@@ -1446,10 +1468,13 @@ function vSettings(m){
   m.innerHTML=`<div class="head"><h1>Settings</h1></div><div class="stack">
   ${instSection()}
 
-  <section class="panel"><h2>Prop accounts</h2><p class="muted small">Optional. Add your funded or evaluation accounts and the dashboard tracks drawdown room, daily loss room and target progress. The name must match the account on your trades.</p>
-   ${S.accounts.length?`<div class="tblwrap"><table class="tbl"><thead><tr><th>Name</th><th>Firm</th><th>Start balance</th><th>Daily loss limit</th><th>Max drawdown</th><th>Drawdown type</th><th>Stops trailing at start</th><th>Profit target</th><th></th></tr></thead><tbody>
+  <section class="panel"><h2>Prop accounts</h2><p class="muted small">Optional. Add your funded or evaluation accounts and the dashboard tracks drawdown room, daily loss room and target progress. The name must match the account on your trades. Type the <b>current balance</b> your broker shows, and Ledger counts the profit you made before you started journaling.</p>
+   ${S.accounts.length?`<div class="tblwrap"><table class="tbl"><thead><tr><th>Name</th><th>Firm</th><th>Start balance</th><th>Current balance</th><th>Highest balance</th><th>Daily loss limit</th><th>Max drawdown</th><th>Drawdown type</th><th>Stops trailing at start</th><th>Profit target</th><th></th></tr></thead><tbody>
    ${S.accounts.map((a,ix)=>`<tr><td><input data-acc="${ix}" data-k="name" value="${esc(a.name)}" style="width:130px"></td><td><input data-acc="${ix}" data-k="firm" value="${esc(a.firm||'')}" style="width:110px"></td>
-    ${['start','daily','maxDD'].map(k=>`<td><input type="number" step="any" data-acc="${ix}" data-k="${k}" value="${a[k]??''}" style="width:100px"></td>`).join('')}
+    <td><input type="number" step="any" data-acc="${ix}" data-k="start" value="${a.start??''}" style="width:100px"></td>
+    <td><input type="number" step="any" data-acc="${ix}" data-k="curBal" value="${+a.start>0?round2(acctState(a).bal):''}" placeholder="from broker" style="width:110px" title="Type what your broker shows. Ledger works out the P&L from before your journal."></td>
+    <td><input type="number" step="any" data-acc="${ix}" data-k="peakBal" value="${a.peakBal??''}" placeholder="optional" style="width:100px" title="Highest balance before your journal started. Needed for trailing drawdown if you were higher before."></td>
+    ${['daily','maxDD'].map(k=>`<td><input type="number" step="any" data-acc="${ix}" data-k="${k}" value="${a[k]??''}" style="width:100px"></td>`).join('')}
     <td><select data-acc="${ix}" data-k="ddType">${opts(['trailing','static'],a.ddType||'trailing')}</select></td><td><input type="checkbox" data-acc="${ix}" data-k="lock" ${a.lock!==false?'checked':''}></td>
     <td><input type="number" step="any" data-acc="${ix}" data-k="target" value="${a.target??''}" style="width:100px"></td><td><button class="btn sm danger" data-act="del-acc" data-i="${ix}">Remove</button></td></tr>`).join('')}</tbody></table></div>`:''}
    <div class="row" style="margin-top:12px"><button class="btn sm" data-act="add-acc">Add an account</button></div></section>
@@ -1471,7 +1496,8 @@ function vSettings(m){
   <section class="panel"><h2>Drawdown messages</h2><p class="muted small">A short message appears on the dashboard when any of these is true. It changes daily and can be hidden for the day.</p>
    <div class="row" style="margin:10px 0"><label class="check"><input type="checkbox" data-mo="enabled" ${mo.enabled?'checked':''}>Show messages</label></div>
    <div class="fgrid"><label class="f">Losing trades in a row<input type="number" min="0" data-mo="lossStreak" value="${mo.lossStreak}"></label><label class="f">Red days in a row<input type="number" min="0" data-mo="redDays" value="${mo.redDays}"></label>
-   <label class="f">Drawdown from peak at least (${esc(cur())})<input type="number" min="0" data-mo="ddMin" value="${mo.ddMin}"></label><span></span>
+   <label class="f">Count drawdown from<select data-mo="ddBase"><option value="start" ${mo.ddBase!=='peak'?'selected':''}>Starting balance (only when down overall)</option><option value="peak" ${mo.ddBase==='peak'?'selected':''}>My equity high (any pullback)</option></select></label>
+   <label class="f">Only if down at least (${esc(cur())})<input type="number" min="0" data-mo="ddMin" value="${mo.ddMin}"></label>
    <label class="f w4">Your rule for drawdown days<input data-mo="rule" value="${esc(mo.rule)}"></label>
    <label class="f w4">Your own messages (one per line, mixed in with the built-in ones)<textarea data-mo="custom">${esc((mo.custom||[]).join('\n'))}</textarea></label></div></section>
 
@@ -1494,7 +1520,9 @@ function vSettings(m){
     if(k==='sym'&&old!==i.sym)S.trades.forEach(t=>{if(t.symbol===old)t.symbol=i.sym});
     recomputeAll();save('instruments');save('trades');render(true)});
   $$('[data-acc]').forEach(el=>el.onchange=()=>{const a=S.accounts[+el.dataset.acc];const k=el.dataset.k;const old=a.name;
-    a[k]=el.type==='checkbox'?el.checked:['start','daily','maxDD','target'].includes(k)?num(el.value):el.value.trim();
+    if(k==='curBal'){const cb=num(el.value);if(cb==null||!(+a.start>0)){toast('Set the start balance first','err');return}
+      const jn=S.trades.filter(t=>t.account===a.name).reduce((s,t)=>s+t.pnl,0);a.prior=round2(cb-(+a.start)-jn);save('accounts');toast(`${a.name}: ${money(a.prior)} from before the journal`);render(true);return}
+    a[k]=el.type==='checkbox'?el.checked:['start','daily','maxDD','target','peakBal'].includes(k)?num(el.value):el.value.trim();
     if(k==='name'&&old&&old!==a.name){S.trades.forEach(t=>{if(t.account===old)t.account=a.name});save('trades')}save('accounts')});
   $$('[data-tk]').forEach(el=>el.oninput=()=>{st.theme[el.dataset.tk]=el.value;applyTheme();save('settings')});
   $$('[data-list]').forEach(el=>el.onchange=()=>{st[el.dataset.list]=el.value.split('\n').map(s=>s.trim()).filter(Boolean);save('settings')});
@@ -1708,7 +1736,7 @@ document.addEventListener('paste',async e=>{
   if(S.view==='journal'){await addImages(files,{date:S.jDate});renderThumbs('#j-thumbs',S.images.filter(i=>i.date===S.jDate));return}
   await addImages(files,{date:todayStr(),auto:true});if(S.view==='gallery')render(true);else toast('Pasted screenshot saved to Screenshots')});
 window.addEventListener('dragover',e=>e.preventDefault());window.addEventListener('drop',e=>e.preventDefault());
-let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(S.view==='dashboard'&&S.trades.length){const ts=filtered();if(ts.length)drawDash(analyze(ts))}},150)});
+let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(S.view==='dashboard'&&S.trades.length){const ts=filtered();if(ts.length)drawDash(analyze(ts,baseFor()))}},150)});
 
 /* ================= init ================= */
 (async function init(){
