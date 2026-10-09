@@ -56,6 +56,7 @@ p{margin:0 0 10px}
 .pos{color:var(--win)}.neg{color:var(--loss)}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px}
 .stack{display:grid;gap:16px}
+.stack>*{min-width:0}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .split3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
@@ -270,6 +271,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:var(--su
   .cal .d b,.cal .wk b{font-size:11px}
   .bd .num{min-width:110px}
   .jlist{max-height:220px}
+  .acct-tbl .hide-m{display:none}
+  .acct-tbl td,.acct-tbl th{padding:8px 6px}
 }
 </style>
 </head>
@@ -659,12 +662,32 @@ function propPanel(){
     const meter=(v,maxv,col)=>`<div class="meter"><i style="width:${Math.max(0,Math.min(100,v/maxv*100))}%;background:${col}"></i></div>`;
     const ddCol=room!=null&&room<mdd*.3?'var(--loss)':'var(--win)';
     return `<div class="panel"><div class="row" style="justify-content:space-between"><h3 style="margin:0">${esc(a.name)}</h3><span class="muted small">${esc(a.firm||'')}</span></div>
-      <div style="font-size:24px;font-weight:700;font-stretch:112%;margin:6px 0 2px">${money(bal,false)}</div><div class="small ${cls(bal-start)}">${money(bal-start)} since start${prior?` <span class="muted">(${money(prior)} before the journal)</span>`:''}</div>
+      <div style="font-size:24px;font-weight:700;font-stretch:112%;margin:6px 0 2px">${money(bal,false)}</div><div class="small ${cls(st.earned)}">${money(st.earned)} since start${st.pay?`, ${money(st.pay,false)} paid out`:''}${prior?` <span class="muted">(${money(prior)} before the journal)</span>`:''}</div>
       ${room!=null?`<div class="small" style="margin-top:12px">Room to max drawdown: <b>${money(room,false)}</b> <span class="muted">(floor ${money(floor,false)})</span></div>${meter(room,mdd,ddCol)}`:''}
       ${dRoom!=null?`<div class="small" style="margin-top:8px">Room to daily loss limit today: <b class="${dRoom<dl*.3?'neg':''}">${money(dRoom,false)}</b></div>${meter(dRoom,dl,dRoom<dl*.3?'var(--loss)':'var(--accent)')}`:''}
       ${prog!=null?`<div class="small" style="margin-top:8px">Profit target: <b>${pct(prog)}</b> of ${money(tgt,false)}</div>${meter(Math.max(0,prog),1,'var(--accent)')}`:''}</div>`}).join('');
   return `<section><div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">Prop accounts</h2><span class="muted small">From closed trades plus each account's balance before the journal. Unrealised intraday swings aren't tracked.</span></div><div class="split3">${cards}</div></section>`;
 }
+
+/* ================= accounts overview ================= */
+function accountsOverview(){
+  const accs=S.accounts.filter(a=>+a.start>0);if(!accs.length)return '';
+  const rows=accs.map(a=>({a,st:acctState(a)}));const T={size:0,bal:0,earned:0,today:0,pay:0};
+  rows.forEach(({st})=>{T.size+=st.start;T.bal+=st.bal;T.earned+=st.earned;T.today+=st.todayP;T.pay+=st.pay});
+  const money=(n,sign=true)=>{if(n==null||!isFinite(n))return '–';const s=Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});return (n<0?'−':(sign&&n>0?'+':''))+cur()+s};
+  const pc=(v,base)=>base?`${v>=0?'+':'−'}${Math.abs(v/base*100).toFixed(2)}%`:'–';
+  const bar=(v,base)=>{const w=Math.min(100,Math.abs(v/base*100)/ (Math.max(...rows.map(r=>Math.abs(r.st.earned/r.st.start*100)),0.01))*100);return `<span class="trk" style="display:inline-block;width:80px;height:8px;position:relative;background:color-mix(in srgb,var(--bg) 60%,var(--surface));border-radius:3px;vertical-align:middle"><span style="position:absolute;top:0;bottom:0;left:0;width:${w}%;background:var(${v>=0?'--win':'--loss'});border-radius:3px"></span></span>`};
+  const sel=S.filter.account;
+  return `<section class="panel"><div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">Accounts</h2><span class="muted small">Combined % is total profit ÷ total account size, so bigger accounts count for more.</span></div>
+  <div class="tblwrap"><table class="tbl acct-tbl"><thead><tr><th>Account</th><th class="r hide-m">Size</th><th class="r hide-m">Balance</th><th class="r">Profit</th><th class="r">Return</th><th class="hide-m"></th><th class="r">Today</th><th class="r hide-m">Room to max DD</th></tr></thead><tbody>
+  ${rows.map(({a,st})=>`<tr class="click" data-act="pick-acct" data-n="${esc(a.name)}" ${sel===a.name?'style="box-shadow:inset 3px 0 0 var(--accent)"':''}><td><b>${esc(a.name)}</b>${a.firm?` <span class="muted small">${esc(a.firm)}</span>`:''}</td><td class="r hide-m">${money(st.start,false)}</td><td class="r hide-m">${money(st.bal,false)}</td>
+    <td class="r ${cls(st.earned)}">${money(st.earned)}${st.pay?`<div class="muted small hide-m">incl. ${money(st.pay,false)} paid out</div>`:''}</td><td class="r ${cls(st.earned)}"><b>${pc(st.earned,st.start)}</b></td><td class="hide-m">${bar(st.earned,st.start)}</td>
+    <td class="r ${cls(st.todayP)}">${st.todayP?money(st.todayP):'–'}</td><td class="r hide-m ${st.room!=null&&st.room<st.mdd*.3?'neg':''}">${st.room!=null?money(st.room,false):'<span class="muted small">set max DD</span>'}</td></tr>`).join('')}
+  ${rows.length>1?`<tr style="border-top:2px solid var(--line)"><td><b>Combined</b> <span class="muted small hide-m">${rows.length} accounts</span></td><td class="r hide-m"><b>${money(T.size,false)}</b></td><td class="r hide-m"><b>${money(T.bal,false)}</b></td>
+    <td class="r ${cls(T.earned)}"><b>${money(T.earned)}</b>${T.pay?`<div class="muted small hide-m">incl. ${money(T.pay,false)} paid out</div>`:''}</td><td class="r ${cls(T.earned)}"><b style="font-size:17px">${pc(T.earned,T.size)}</b></td><td class="hide-m"></td>
+    <td class="r ${cls(T.today)}"><b>${T.today?money(T.today):'–'}</b></td><td class="hide-m"></td></tr>`:''}
+  </tbody></table></div>
+  ${rows.some(r=>r.a.prior==null||r.a.prior==='')?`<p class="muted small" style="margin:8px 0 0">An account without a current balance only counts profit from trades in this journal. Set it in Settings → Prop accounts, or re-import its Tradovate Account info file.</p>`:''}</section>`}
 
 /* ================= dashboard ================= */
 function emptyState(){
@@ -683,6 +706,7 @@ function vDash(m){
     const span=A.days.length?`${fmtDate(A.days[0].date)} to ${fmtDate(A.days[A.days.length-1].date)}`:'';
     const ctx=dayContext(ts);
     body=`<div class="stack">
+    ${accountsOverview()}
     <section class="panel hero"><div class="hero-top"><div><div class="muted small">Net P&amp;L</div><div class="big ${cls(A.net)}">${money(A.net)}</div>
       <div class="meta">${A.n} trades over ${A.days.length} days, ${esc(span)}</div>${A.based?`<div class="meta">Account P&amp;L including before the journal: <b class="${cls(A.endEq)}">${money(A.endEq)}</b></div>`:''}</div>
       <div class="muted small" style="text-align:right">Equity curve with drawdown below</div></div><div class="chart" id="eq"></div></section>
@@ -753,10 +777,11 @@ function calendarHTML(A){
 
 /* ================= risk of ruin ================= */
 function acctPrior(a){const start=+a.start||0,prior=+a.prior||0;const peakBal=a.peakBal!=null&&a.peakBal!==''?+a.peakBal:start+Math.max(prior,0);return{start,prior,peakBal:Math.max(peakBal,start+prior)}}
-function acctState(a){const ts=S.trades.filter(t=>t.account===a.name).sort(byDT);const P=acctPrior(a);const start=P.start;let bal=start+P.prior,peak=P.peakBal;
+function acctState(a){const ts=S.trades.filter(t=>t.account===a.name).sort(byDT);const P=acctPrior(a);const start=P.start,pay=+a.payouts||0;let bal=start+P.prior-pay,peak=Math.max(P.peakBal-pay,bal);
   for(const t of ts){bal+=t.pnl;peak=Math.max(peak,bal)}const mdd=+a.maxDD||0;let floor=null;
   if(mdd)floor=a.ddType==='trailing'?(a.lock!==false?Math.min(peak-mdd,start):peak-mdd):start-mdd;
-  return{start,bal,peak,mdd,floor,room:floor!=null?bal-floor:null}}
+  const today=todayStr(),todayP=ts.filter(t=>t.date===today).reduce((s,t)=>s+t.pnl,0);
+  return{start,bal,peak,mdd,floor,room:floor!=null?bal-floor:null,pay,earned:bal-start+pay,todayP}}
 function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 function monteCarlo(samples,o){
   const N=5000,len=samples.length;const r=mulberry(len*7919+Math.round(Math.abs(samples.reduce((s,x)=>s+x,0))*100));
@@ -1433,7 +1458,7 @@ function fillsGo(){
   for(const g of S.fills.groups){if(!g.account||!g.acct||g.acct.netLiq==null)continue;const size=g.size??guessSize(g.acct.netLiq);
     let a=S.accounts.find(x=>x.name===g.account);if(!a){a={id:uid(),name:g.account,firm:'',start:size,daily:null,maxDD:null,ddType:'trailing',lock:true,target:null};S.accounts.push(a)}
     if(!(+a.start>0))a.start=size;const jn=S.trades.filter(t=>t.account===a.name).reduce((s,t)=>s+t.pnl,0);
-    a.prior=round2(g.acct.netLiq-(g.acct.openPL||0)-(+a.start)-jn);synced++}
+    a.prior=round2(g.acct.netLiq-(g.acct.openPL||0)-(+a.start)-jn+(+a.payouts||0));synced++}
   if(synced)save('accounts');
   if(!n){if(synced){S.fills=null;toast(`Balances updated for ${plural(synced,'account')}`);S.view='dashboard';render()}return}
   S.imports.unshift({id:batch,file:`Tradovate orders (${S.fills.groups.length} export${S.fills.groups.length>1?'s':''})`,count:n,at:Date.now()});
@@ -1469,10 +1494,11 @@ function vSettings(m){
   ${instSection()}
 
   <section class="panel"><h2>Prop accounts</h2><p class="muted small">Optional. Add your funded or evaluation accounts and the dashboard tracks drawdown room, daily loss room and target progress. The name must match the account on your trades. Type the <b>current balance</b> your broker shows, and Ledger counts the profit you made before you started journaling.</p>
-   ${S.accounts.length?`<div class="tblwrap"><table class="tbl"><thead><tr><th>Name</th><th>Firm</th><th>Start balance</th><th>Current balance</th><th>Highest balance</th><th>Daily loss limit</th><th>Max drawdown</th><th>Drawdown type</th><th>Stops trailing at start</th><th>Profit target</th><th></th></tr></thead><tbody>
+   ${S.accounts.length?`<div class="tblwrap"><table class="tbl"><thead><tr><th>Name</th><th>Firm</th><th>Start balance</th><th>Current balance</th><th>Payouts taken</th><th>Highest balance</th><th>Daily loss limit</th><th>Max drawdown</th><th>Drawdown type</th><th>Stops trailing at start</th><th>Profit target</th><th></th></tr></thead><tbody>
    ${S.accounts.map((a,ix)=>`<tr><td><input data-acc="${ix}" data-k="name" value="${esc(a.name)}" style="width:130px"></td><td><input data-acc="${ix}" data-k="firm" value="${esc(a.firm||'')}" style="width:110px"></td>
     <td><input type="number" step="any" data-acc="${ix}" data-k="start" value="${a.start??''}" style="width:100px"></td>
     <td><input type="number" step="any" data-acc="${ix}" data-k="curBal" value="${+a.start>0?round2(acctState(a).bal):''}" placeholder="from broker" style="width:110px" title="Type what your broker shows. Ledger works out the P&L from before your journal."></td>
+    <td><input type="number" step="any" data-acc="${ix}" data-k="payouts" value="${a.payouts??''}" placeholder="0" style="width:100px" title="Total withdrawn so far. Counted as profit, not loss."></td>
     <td><input type="number" step="any" data-acc="${ix}" data-k="peakBal" value="${a.peakBal??''}" placeholder="optional" style="width:100px" title="Highest balance before your journal started. Needed for trailing drawdown if you were higher before."></td>
     ${['daily','maxDD'].map(k=>`<td><input type="number" step="any" data-acc="${ix}" data-k="${k}" value="${a[k]??''}" style="width:100px"></td>`).join('')}
     <td><select data-acc="${ix}" data-k="ddType">${opts(['trailing','static'],a.ddType||'trailing')}</select></td><td><input type="checkbox" data-acc="${ix}" data-k="lock" ${a.lock!==false?'checked':''}></td>
@@ -1521,8 +1547,10 @@ function vSettings(m){
     recomputeAll();save('instruments');save('trades');render(true)});
   $$('[data-acc]').forEach(el=>el.onchange=()=>{const a=S.accounts[+el.dataset.acc];const k=el.dataset.k;const old=a.name;
     if(k==='curBal'){const cb=num(el.value);if(cb==null||!(+a.start>0)){toast('Set the start balance first','err');return}
-      const jn=S.trades.filter(t=>t.account===a.name).reduce((s,t)=>s+t.pnl,0);a.prior=round2(cb-(+a.start)-jn);save('accounts');toast(`${a.name}: ${money(a.prior)} from before the journal`);render(true);return}
-    a[k]=el.type==='checkbox'?el.checked:['start','daily','maxDD','target','peakBal'].includes(k)?num(el.value):el.value.trim();
+      const jn=S.trades.filter(t=>t.account===a.name).reduce((s,t)=>s+t.pnl,0);a.prior=round2(cb-(+a.start)-jn+(+a.payouts||0));save('accounts');toast(`${a.name}: ${money(a.prior)} from before the journal`);render(true);return}
+    const oldPay=+a.payouts||0;
+    a[k]=el.type==='checkbox'?el.checked:['start','daily','maxDD','target','peakBal','payouts'].includes(k)?num(el.value):el.value.trim();
+    if(k==='payouts'&&a.prior!=null&&a.prior!==''){a.prior=round2((+a.prior)+((+a.payouts||0)-oldPay))}
     if(k==='name'&&old&&old!==a.name){S.trades.forEach(t=>{if(t.account===old)t.account=a.name});save('trades')}save('accounts')});
   $$('[data-tk]').forEach(el=>el.oninput=()=>{st.theme[el.dataset.tk]=el.value;applyTheme();save('settings')});
   $$('[data-list]').forEach(el=>el.onchange=()=>{st[el.dataset.list]=el.value.split('\n').map(s=>s.trim()).filter(Boolean);save('settings')});
@@ -1711,6 +1739,7 @@ const ACT={
   'recap':()=>{const last=[...S.trades].sort(byDT).pop();if(!last){toast('No trades to recap yet');return}const R=recapData(weekStart(last.date));if(!R)return;showModal(recapHTML(R,true),true);bindRecap()},
   'hide-recap':()=>{const ws=weekStart(todayStr());S.weekly[ws]={...(S.weekly[ws]||{}),hidden:true};save('weekly');render(true)},
   'open-trade':a=>{const id=a.dataset.id;closeModal();openTrade(id)},
+  'pick-acct':a=>{S.filter.account=S.filter.account===a.dataset.n?'':a.dataset.n;render(true)},
   'ror-unit':a=>{S.settings.ror.unit=a.dataset.v;save('settings');refreshRor()},
   'fs-choose':()=>fsChoose(),'fs-resolve':()=>{if(FS.pending)conflictModal(FS.pending.data,'Your journal folder has newer data')},
   'fs-later':()=>{S.fsNudge=Date.now()+7*864e5;kvSet('fsNudge',S.fsNudge);render(true)},'fs-reconnect':()=>fsReconnect(),'fs-now':async()=>{await syncNow(true);if(!FS.err)toast('Saved to folder')},'fs-stop':()=>fsStop(),'fs-load':()=>fsLoad(),'fs-overwrite':()=>fsOverwrite(),
