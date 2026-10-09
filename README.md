@@ -24,7 +24,7 @@ iPhone/iPad: open the link in Safari → Share → Add to Home Screen.
 
 Installing needs a web address (GitHub Pages or `http://localhost:8000`). Double-clicking `index.html` still works but can't be installed.
 
-After uploading a new `index.html`, also change `VERSION` in `sw.js` (e.g. `ledger-v2`) so installed copies pick up the update.
+Updates: upload the new `index.html` (and `sw.js` when it changes). The app checks for a new version every time it opens, so close and reopen once to see it.
 
 **Your data is tied to the address.** The installed app shares data with the same address in the browser. If you've been using a different address (e.g. a local file), download a backup there first and restore it in the app, or connect the same auto-save folder.
 
@@ -32,7 +32,16 @@ After uploading a new `index.html`, also change `VERSION` in `sw.js` (e.g. `ledg
 1. **Settings → Futures contracts / CFD symbols**: tap NQ, MNQ, NAS100, XAUUSD etc. Set your commission. For CFDs, check the contract size against MT5 (right-click symbol → Specification).
 2. **Settings → Prop accounts** (optional): start balance, daily loss limit, max drawdown, target.
 3. **Import**: drop your broker CSV. Map columns once; it's remembered for that export format.
-4. Or log trades on the **Trades** page. Enter saves, and the contract/side/size stay filled.
+4. Or log trades on the **Trades** page. Enter saves, and the contract/side/size/account stay filled.
+
+## Everyday use
+- **Shortcuts:** `N` log a trade, `/` search trades, `Esc` close a window, `←`/`→` flick through screenshots.
+- **Trades table:** search by instrument, tag, note or account; click a column header to sort.
+- **Deleted something by mistake?** Click **Undo** on the message that pops up (a few seconds).
+- **Trade window:** risk, fees and P&L overrides sit under **More options**. Closing with unsaved changes asks first.
+- **Analytics:** best/worst day, expectancy, win rate, by instrument, session, weekday, entry hour, setup and trade number in the day.
+- **Settings:** use the chips at the top to jump to a section.
+- **Tradovate fills import:** each file is matched to the account with the closest balance; check it before importing.
 
 Screenshots: paste with Ctrl/Cmd+V on a trade, on a journal day, or anywhere in the app.
 
