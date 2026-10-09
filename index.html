@@ -534,8 +534,8 @@ function analyze(list,base){
   A.curDayStreak=dws>0?dws:-dls;
   const green=A.days.filter(d=>d.pnl>0),red=A.days.filter(d=>d.pnl<0);
   A.greenDays=green.length;A.redDays=red.length;
-  A.bestDay=A.days.length?A.days.reduce((a,b)=>b.pnl>a.pnl?b:a):null;
-  A.worstDay=A.days.length?A.days.reduce((a,b)=>b.pnl<a.pnl?b:a):null;
+  A.bestDay=green.length?green.reduce((a,b)=>b.pnl>a.pnl?b:a):null;
+  A.worstDay=red.length?red.reduce((a,b)=>b.pnl<a.pnl?b:a):null;
   A.avgGreenDay=green.length?green.reduce((s,d)=>s+d.pnl,0)/green.length:null;
   A.avgRedDay=red.length?red.reduce((s,d)=>s+d.pnl,0)/red.length:null;
   A.winRate=A.w+A.l?A.w/(A.w+A.l):null;
@@ -779,8 +779,8 @@ function keyStats(A){
     ${ledgerCell('Expectancy',money(A.exp),A.avgR!=null?`${fx(A.avgR)}R per trade`:'per trade',cls(A.exp))}
     ${ledgerCell('Avg win ÷ avg loss',fx(A.ratio),`${money(A.avgWin)} vs ${money(A.avgLoss)}`)}
     ${ledgerCell('Max drawdown',money(-A.maxDD),`Now ${money(-A.curDD)} from peak`,A.maxDD?'neg':'')}
-    ${ledgerCell('Best day',A.bestDay?money(A.bestDay.pnl):'–',A.bestDay?fmtDate(A.bestDay.date):'',A.bestDay?cls(A.bestDay.pnl):'')}
-    ${ledgerCell('Worst day',A.worstDay?money(A.worstDay.pnl):'–',A.worstDay?fmtDate(A.worstDay.date):'',A.worstDay?cls(A.worstDay.pnl):'')}
+    ${ledgerCell('Best day',A.bestDay?money(A.bestDay.pnl):'–',A.bestDay?fmtDate(A.bestDay.date):'No green days yet',A.bestDay?cls(A.bestDay.pnl):'')}
+    ${ledgerCell('Worst day',A.worstDay?money(A.worstDay.pnl):'–',A.worstDay?fmtDate(A.worstDay.date):'No red days yet',A.worstDay?cls(A.worstDay.pnl):'')}
     ${ledgerCell('Current streak',st,`Longest ${A.maxWS} wins, ${A.maxLS} losses`,A.curStreak>0?'pos':A.curStreak<0?'neg':'')}`}
 function moreStats(A){
   return `${ledgerCell('Green days',pct(A.dayWinRate),`${A.greenDays} green, ${A.redDays} red`)}
