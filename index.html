@@ -275,6 +275,62 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:var(--su
   .acct-tbl .hide-m{display:none}
   .acct-tbl td,.acct-tbl th{padding:8px 6px}
 }
+
+/* minimal pass */
+.cal .d{background:transparent;border:1px solid color-mix(in srgb,var(--line) 45%,transparent)}
+.cal .d.out{border-color:transparent}
+.cal .wk{border:0;background:color-mix(in srgb,var(--bg) 35%,var(--surface))}
+.goal{background:transparent;border:0;padding:0 0 4px}
+.ins li{background:transparent;padding:6px 12px}
+.panel{border:0;border-radius:14px;padding:20px}
+.ledger{border:0;background:transparent;border-radius:0;gap:0}
+.panel .ledger{margin:0 -4px}
+.ledger > div{border:0!important;padding:12px 4px}
+.ledger .v{font-size:20px}
+.tblwrap{border:0;border-radius:0}
+table.tbl{background:transparent}
+.tbl th{background:var(--surface);font-weight:500}
+.tbl td{border-bottom-color:color-mix(in srgb,var(--line) 45%,transparent)}
+.motive{background:transparent;border:0;border-left:2px solid var(--accent);border-radius:0;padding:4px 0 4px 14px;grid-template-columns:1fr auto;margin:4px 0 20px}
+.motive .bar{display:none}
+.motive .msg{font-size:15px;font-weight:600}
+.recap{border:0}
+h2{font-size:15px;font-weight:600;color:var(--text)}
+.btn{border-color:color-mix(in srgb,var(--line) 80%,transparent)}
+.filters{margin-bottom:20px}
+.filters select{border-color:color-mix(in srgb,var(--line) 80%,transparent)}
+.stack{gap:20px}
+.strip{display:grid;gap:12px}
+.goalline{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.meter.thin{height:4px;margin:0}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.kpis > div{display:grid;gap:2px}
+.kpis .k{font-size:12.5px;color:var(--muted)}
+.kpis b{font-size:22px;font-weight:700;font-stretch:112%;letter-spacing:-.01em}
+.kpis .s{font-size:12.5px;color:var(--muted)}
+.kpis .s.pos{color:var(--win)}.kpis .s.neg{color:var(--loss)}
+.linkbtn{background:none;border:0;padding:0;color:var(--muted);font-size:13px;cursor:pointer;justify-self:start;text-decoration:underline;text-underline-offset:3px}
+.linkbtn:hover{color:var(--text)}
+.disc2{grid-template-columns:auto 1fr auto;align-items:center;gap:16px;padding:14px 0;border-top:1px solid color-mix(in srgb,var(--line) 60%,transparent);border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
+.dscore{background:none;border:0;color:inherit;cursor:pointer;display:flex;align-items:baseline;gap:4px;padding:0}
+.dscore b{font-size:36px;font-weight:800;font-stretch:120%;letter-spacing:-.03em;line-height:1}
+.dscore span{font-size:15px;font-weight:700}
+.hero{padding:20px 20px 8px}
+.side-foot{opacity:.8}
+@media (max-width:820px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  main{min-width:0}
+  nav.side .nm{display:none}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .disc2{grid-template-columns:auto 1fr}
+  .disc2 > .btn{grid-column:1/-1;justify-self:start}
+  .panel{padding:16px}
+  .filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .filters .seg{grid-column:1/-1}
+  .filters select{max-width:none;width:100%}
+  .cal .d span:nth-child(2){display:none}
+  .cal .d b{font-size:10px}
+}
 </style>
 </head>
 <body>
@@ -282,10 +338,11 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px;background:var(--su
   <nav class="side" aria-label="Main">
     <div class="brand"><i></i>Ledger</div>
     <button data-view="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l5-5 4 4 8-8"/><path d="M14 8h6v6"/></svg>Dashboard</button>
+    <button data-view="analytics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Analytics</button>
     <button data-view="trades"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Trades</button>
     <button data-view="journal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3z"/><path d="M9 9h6M9 13h6"/></svg>Journal</button>
-    <button data-view="gallery"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>Screenshots</button>
-    <button data-view="import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 19h16"/></svg>Import</button>
+    <button data-view="gallery" class="nm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>Screenshots</button>
+    <button data-view="import" class="nm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 19h16"/></svg>Import</button>
     <button data-view="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>Settings</button>
     <button id="install-btn" class="install" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Install app</button>
     <div class="side-foot" id="fs-status">Data stays in this browser. Back it up from Settings.</div>
@@ -316,7 +373,7 @@ const cur=()=>S.settings.currency||'$';
 const money=(n,sign=true)=>{
   if(n==null||!isFinite(n))return '–';
   const a=Math.abs(n);
-  const s=a>=100000?a.toLocaleString(undefined,{maximumFractionDigits:0}):a.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  const s=a>=1000000?a.toLocaleString(undefined,{maximumFractionDigits:0}):a.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   return (n<0?'−':(sign&&n>0?'+':''))+cur()+s;
 };
 const moneyShort=n=>{const a=Math.abs(n);const s=a>=1e6?(a/1e6).toFixed(1)+'m':a>=1e3?(a/1e3).toFixed(a>=1e4?0:1)+'k':a.toFixed(0);return (n<0?'−':'')+cur()+s};
@@ -715,54 +772,89 @@ function emptyState(){
   <ol class="stepper">${steps.map(([l,d,go])=>`<li class="${d?'done':''}"><span class="spacer">${l}</span><button class="btn sm" data-go="${go}">${d?'Edit':'Open'}</button></li>`).join('')}</ol>
   <div class="row" style="justify-content:center"><button class="btn" data-go="import">Import CSV</button><button class="btn pri" data-go="trades">Log a trade</button></div></div>`}
 function ledgerCell(k,v,s,c=''){return `<div><div class="k">${k}</div><div class="v ${c}">${v}</div><div class="s">${s||'&nbsp;'}</div></div>`}
-function vDash(m){
-  if(!S.trades.length){m.innerHTML=`<div class="head"><h1>Dashboard</h1></div>${emptyState()}`;return}
-  const ts=filtered();const A=analyze(ts,baseFor());const G=S.settings.game.enabled?gameState():null;
-  let body;
-  if(!ts.length)body=`<div class="panel empty"><p>No trades match these filters.</p><button class="btn" data-act="range" data-v="all">Show all trades</button></div>`;
-  else{
-    const st=A.curStreak>0?`${A.curStreak} win${A.curStreak>1?'s':''}`:A.curStreak<0?`${-A.curStreak} loss${A.curStreak<-1?'es':''}`:'–';
-    const span=A.days.length?`${fmtDate(A.days[0].date)} to ${fmtDate(A.days[A.days.length-1].date)}`:'';
-    const ctx=dayContext(ts);
-    body=`<div class="stack">
-    ${accountsOverview()}
-    <section class="panel hero"><div class="hero-top"><div><div class="muted small">Net P&amp;L</div><div class="big ${cls(A.net)}">${money(A.net)}</div>
-      <div class="meta">${A.n} trades over ${A.days.length} days, ${esc(span)}</div>${A.based?`<div class="meta">Account P&amp;L including before the journal: <b class="${cls(A.endEq)}">${money(A.endEq)}</b></div>`:''}</div>
-      <div class="muted small" style="text-align:right">Equity curve with drawdown below</div></div><div class="chart" id="eq"></div></section>
-    <div class="ledger">
-      ${ledgerCell('Win rate',pct(A.winRate),A.breakevenWR!=null?`Break-even at ${pct(A.breakevenWR)} with your payoff`:`${A.w} wins, ${A.l} losses`)}
-      ${ledgerCell('Profit factor',A.pf===Infinity?'∞':fx(A.pf),`${money(A.gw)} won, ${money(A.gl)} lost`,A.pf!=null&&A.pf<1?'neg':'')}
-      ${ledgerCell('Expectancy per trade',money(A.exp),A.avgR!=null?`Average ${fx(A.avgR)}R (${A.rN} trades with a stop)`:'Add a stop to see R',cls(A.exp))}
-      ${ledgerCell('Avg win ÷ avg loss',fx(A.ratio),`${money(A.avgWin)} vs ${money(A.avgLoss)}`)}
-      ${ledgerCell('Max drawdown',money(-A.maxDD),`Now ${money(-A.curDD)} from peak`,A.maxDD?'neg':'')}
-      ${ledgerCell('Best day',A.bestDay?money(A.bestDay.pnl):'–',A.bestDay?fmtDate(A.bestDay.date):'',A.bestDay?cls(A.bestDay.pnl):'')}
-      ${ledgerCell('Worst day',A.worstDay?money(A.worstDay.pnl):'–',A.worstDay?fmtDate(A.worstDay.date):'',A.worstDay?cls(A.worstDay.pnl):'')}
-      ${ledgerCell('Green days',pct(A.dayWinRate),`${A.greenDays} green, ${A.redDays} red`)}
-      ${ledgerCell('Current streak',st,`Longest: ${A.maxWS} wins, ${A.maxLS} losses`,A.curStreak>0?'pos':A.curStreak<0?'neg':'')}
-      ${ledgerCell('Avg green day',A.avgGreenDay!=null?money(A.avgGreenDay):'–',A.avgRedDay!=null?`Avg red day ${money(A.avgRedDay)}`:'')}
-      ${ledgerCell('Largest win',money(A.largestW),`Largest loss ${money(A.largestL)}`,'pos')}
-      ${ledgerCell('Fees paid',money(-A.fees),A.gw?`${pct(A.fees/A.gw)} of gross wins`:'')}
-      ${ledgerCell('Hold time',A.avgHoldW!=null?fmtHold(A.avgHoldW):'–',A.avgHoldL!=null?`Winners vs losers ${fmtHold(A.avgHoldL)}`:'Needs exit times')}
-      ${ledgerCell('Best day share',A.consistency!=null?pct(A.consistency):'–','Best day as % of total profit',A.consistency>.4?'neg':'')}
-      ${ledgerCell('Trades per day',A.days.length?fx(A.n/A.days.length,1):'–',`${A.be} break-even trades`)}
-      ${ledgerCell('Total R',A.rN?fx(A.rSum,1)+'R':'–',A.rN?`${A.rN} of ${A.n} trades have a stop`:'Add stops to track R',A.rN?cls(A.rSum):'')}
+function keyStats(A){
+  const st=A.curStreak>0?`${A.curStreak} win${A.curStreak>1?'s':''}`:A.curStreak<0?`${-A.curStreak} loss${A.curStreak<-1?'es':''}`:'–';
+  return `${ledgerCell('Win rate',pct(A.winRate),A.breakevenWR!=null?`Break-even at ${pct(A.breakevenWR)}`:`${A.w} wins, ${A.l} losses`)}
+    ${ledgerCell('Profit factor',A.pf===Infinity?'∞':fx(A.pf),`${money(A.gw)} won, ${money(A.gl)} lost`,A.pf!=null&&A.pf<1?'neg':'')}
+    ${ledgerCell('Expectancy',money(A.exp),A.avgR!=null?`${fx(A.avgR)}R per trade`:'per trade',cls(A.exp))}
+    ${ledgerCell('Avg win ÷ avg loss',fx(A.ratio),`${money(A.avgWin)} vs ${money(A.avgLoss)}`)}
+    ${ledgerCell('Max drawdown',money(-A.maxDD),`Now ${money(-A.curDD)} from peak`,A.maxDD?'neg':'')}
+    ${ledgerCell('Best day',A.bestDay?money(A.bestDay.pnl):'–',A.bestDay?fmtDate(A.bestDay.date):'',A.bestDay?cls(A.bestDay.pnl):'')}
+    ${ledgerCell('Worst day',A.worstDay?money(A.worstDay.pnl):'–',A.worstDay?fmtDate(A.worstDay.date):'',A.worstDay?cls(A.worstDay.pnl):'')}
+    ${ledgerCell('Current streak',st,`Longest ${A.maxWS} wins, ${A.maxLS} losses`,A.curStreak>0?'pos':A.curStreak<0?'neg':'')}`}
+function moreStats(A){
+  return `${ledgerCell('Green days',pct(A.dayWinRate),`${A.greenDays} green, ${A.redDays} red`)}
+    ${ledgerCell('Avg green day',A.avgGreenDay!=null?money(A.avgGreenDay):'–',A.avgRedDay!=null?`Avg red day ${money(A.avgRedDay)}`:'')}
+    ${ledgerCell('Largest win',money(A.largestW),`Largest loss ${money(A.largestL)}`,'pos')}
+    ${ledgerCell('Fees paid',money(-A.fees),A.gw?`${pct(A.fees/A.gw)} of gross wins`:'')}
+    ${ledgerCell('Hold time',A.avgHoldW!=null?fmtHold(A.avgHoldW):'–',A.avgHoldL!=null?`Losers ${fmtHold(A.avgHoldL)}`:'Needs exit times')}
+    ${ledgerCell('Best day share',A.consistency!=null?pct(A.consistency):'–','Of total profit',A.consistency>.4?'neg':'')}
+    ${ledgerCell('Trades per day',A.days.length?fx(A.n/A.days.length,1):'–',`${A.be} break-even`)}
+    ${ledgerCell('Total R',A.rN?fx(A.rSum,1)+'R':'–',A.rN?`${A.rN} of ${A.n} trades have a stop`:'Add stops to track R',A.rN?cls(A.rSum):'')}`}
+function heroHTML(A){const span=A.days.length?`${fmtDate(A.days[0].date)} to ${fmtDate(A.days[A.days.length-1].date)}`:'';
+  return `<section class="panel hero"><div class="hero-top"><div><div class="muted small">Net P&amp;L</div><div class="big ${cls(A.net)}">${money(A.net)}</div>
+    <div class="meta">${plural(A.n,'trade')} over ${plural(A.days.length,'day')}, ${esc(span)}</div>${A.based?`<div class="meta">Including before the journal: <b class="${cls(A.endEq)}">${money(A.endEq)}</b></div>`:''}</div></div><div class="chart" id="eq"></div></section>`}
+function noticeHTML(view){
+  if(fsSupported()&&FS.state==='paused')return fsBanner();
+  if(fsSupported()&&FS.state==='behind')return behindBanner();
+  if(view!=='dashboard')return '';
+  return motivation()||showRecapCard()||((fsSupported()&&FS.state==='off'&&Date.now()>(S.fsNudge||0))?nudgeBanner():'');
+}
+function portfolioStrip(){
+  const accs=S.accounts.filter(a=>+a.start>0);if(!accs.length)return '';
+  const rows=accs.map(a=>({a,st:acctState(a)}));const T={size:0,earned:0,today:0,pay:0};rows.forEach(({st})=>{T.size+=st.start;T.earned+=st.earned;T.today+=st.todayP;T.pay+=st.pay});
+  const g=S.settings.goal||{amount:1000000,metric:'capital'};const gv=g.metric==='profit'?T.earned:g.metric==='payouts'?T.pay:T.size;const gp=g.amount>0?Math.max(0,gv/g.amount):0;
+  const gLabel={capital:'capital',profit:'profit',payouts:'paid out'}[g.metric]||'capital';
+  const withRoom=rows.filter(r=>r.st.room!=null);const tight=withRoom.length?withRoom.reduce((a,b)=>(b.st.room/b.st.mdd)<(a.st.room/a.st.mdd)?b:a):null;
+  const m2=n=>(n<0?'−':'')+cur()+Math.abs(n).toLocaleString(undefined,{maximumFractionDigits:0});
+  const pcs=(v,b)=>b?`${v>=0?'+':'−'}${Math.abs(v/b*100).toFixed(2)}%`:'–';
+  return `<section class="strip">
+    ${g.amount>0?`<div class="goalline"><span class="muted small">${m2(gv)} of ${m2(g.amount)} ${gLabel}</span><span class="small"><b>${(Math.floor(gp*1000)/10).toFixed(1)}%</b></span></div><div class="meter thin"><i style="width:${Math.min(100,gp*100)}%;background:var(--accent)"></i></div>`:''}
+    <div class="kpis">
+      <div><span class="k">Capital</span><b>${m2(T.size)}</b><span class="s">${plural(rows.length,'account')}</span></div>
+      <div><span class="k">Total profit</span><b class="${cls(T.earned)}">${money(T.earned)}</b><span class="s ${cls(T.earned)}">${pcs(T.earned,T.size)}</span></div>
+      <div><span class="k">Today</span><b class="${cls(T.today)}">${T.today?money(T.today):'–'}</b><span class="s">${T.today?pcs(T.today,T.size):'No trades yet'}</span></div>
+      <div><span class="k">Tightest drawdown room</span><b class="${tight&&tight.st.room<tight.st.mdd*.3?'neg':''}">${tight?money(tight.st.room,false):'–'}</b><span class="s">${tight?esc(tight.a.name):'Set max drawdown in Settings'}</span></div>
     </div>
+    <button class="linkbtn" data-go="analytics">Accounts and portfolio details</button>
+  </section>`}
+function discStrip(G){
+  if(!S.settings.game.enabled||!G||!G.days.length)return '';const L=G.last;const m=G.mow;const focus=S.weekly[addDays(weekStart(todayStr()),-7)]?.fix;
+  return `<section class="strip disc2"><button class="dscore" data-act="open-day" data-d="${L.date}" title="See the breakdown in your journal"><b class="${gradeCls(L.score)}">${L.score}</b><span class="${gradeCls(L.score)}">${gradeOf(L.score)}</span></button>
+    <div class="dmeta"><div class="small">Discipline score, ${esc(fmtDateShort(L.date))}</div>
+      <div class="muted small">${plural(G.disc.cur,'disciplined day')} in a row. Journal streak ${G.jr.cur}. Rank ${esc(G.rank)}${G.next?`, ${G.next[1]-G.pts} points to ${esc(G.next[0])}`:''}.</div>
+      ${m?`<div class="small" style="margin-top:4px">Mistake of the week: <b>${esc(m.tag)}</b>, ${m.now} so far (goal ${m.goal||'zero'})</div>`:''}${focus?`<div class="small">Focus: ${esc(focus)}</div>`:''}</div>
+    <button class="btn sm" data-act="ach">Achievements ${G.unlocked.length}/${G.ach.length}</button></section>`}
+function vDash(m){
+  if(!S.trades.length){m.innerHTML=`<div class="head"><h1>Dashboard</h1></div>${noticeHTML('dashboard')}${emptyState()}`;return}
+  const ts=filtered();const A=analyze(ts,baseFor());const G=S.settings.game.enabled?gameState():null;
+  const body=!ts.length?`<div class="panel empty"><p>No trades match these filters.</p><button class="btn" data-act="range" data-v="all">Show all trades</button></div>`
+   :`<div class="stack">${portfolioStrip()}${discStrip(G)}${heroHTML(A)}
+    <section class="panel"><div class="ledger">${keyStats(A)}</div></section>
+    <section class="panel" id="calp">${calendarHTML(A)}</section>
+    <div class="row" style="justify-content:center"><button class="btn" data-go="analytics">Open full analytics</button></div></div>`;
+  m.innerHTML=`<div class="head"><h1>Dashboard</h1><div class="row"><button class="btn" data-go="import">Import</button><button class="btn pri" data-go="trades">Log a trade</button></div></div>${filterBar()}${noticeHTML('dashboard')}${body}`;
+  bindFilters();bindRecap();if(G)checkNewAch(G);if(ts.length)drawDash(A);
+}
+function vAnalytics(m){
+  if(!S.trades.length){m.innerHTML=`<div class="head"><h1>Analytics</h1></div>${emptyState()}`;return}
+  const ts=filtered();const A=analyze(ts,baseFor());const ctx=dayContext(ts);
+  const body=!ts.length?`<div class="panel empty"><p>No trades match these filters.</p><button class="btn" data-act="range" data-v="all">Show all trades</button></div>`:`<div class="stack">
+    ${accountsOverview()}
+    <section class="panel"><h2>Performance</h2><div class="ledger">${keyStats(A)}${moreStats(A)}</div></section>
+    <section class="panel"><h2>Daily P&amp;L</h2><div class="chart" id="daily"></div></section>
     <section class="panel" id="ror">${rorHTML(ts,A)}</section>
-    <div class="split"><section class="panel" id="calp">${calendarHTML(A)}</section>
-      <section class="panel"><h2>Daily P&amp;L</h2><div class="chart" id="daily"></div></section></div>
     <div class="split3"><section class="panel"><h2>By instrument</h2>${new Set(ts.map(t=>t.market)).size>1?breakdown(groupBy(ts,t=>t.market==='cfd'?'All CFD':t.market==='future'?'All futures':'Unknown'))+'<div style="height:12px"></div>':''}${breakdown(groupBy(ts,t=>t.symbol))}</section>
       <section class="panel"><h2>By setup</h2>${breakdown(groupBy(ts,t=>t.setup||'No setup'))}</section>
       <section class="panel"><h2>By session</h2>${breakdown(groupBy(ts,t=>t.session||'No time'))}</section></div>
-    <div class="split3"><section class="panel"><h2>By weekday</h2>${breakdown(groupBy(ts,t=>DOW[dowOf(t.date)]).map(g=>({...g,key:g.key})).sort((a,b)=>DOW.indexOf(a.key)-DOW.indexOf(b.key)),{sort:'none'})}</section>
+    <div class="split3"><section class="panel"><h2>By weekday</h2>${breakdown(groupBy(ts,t=>DOW[dowOf(t.date)]).sort((a,b)=>DOW.indexOf(a.key)-DOW.indexOf(b.key)),{sort:'none'})}</section>
       <section class="panel"><h2>By entry hour</h2>${breakdown(groupBy(ts,t=>t.time?t.time.slice(0,2)+':00':null),{sort:'key',limit:24})}</section>
       <section class="panel"><h2>By trade number in the day</h2>${breakdown(groupBy(ts,t=>{const i=ctx.get(t.id)?.idx||1;return i>=4?'4th or later':['1st','2nd','3rd'][i-1]+' trade'}),{sort:'key'})}</section></div>
     <div class="split"><section class="panel"><h2>What the data says</h2>${(()=>{const ins=insights(ts,A);return ins.length?`<ul class="ins">${ins.map(i=>`<li class="${i.tone}">${esc(i.text)}</li>`).join('')}</ul>`:'<p class="muted small">Log at least 5 trades to unlock insights.</p>'})()}</section>
       <section class="panel"><h2>Cost of mistakes</h2>${mistakesHTML(ts,A)}</section></div>
     ${propPanel()}</div>`;
-  }
-  m.innerHTML=`<div class="head"><h1>Dashboard</h1><div class="row">${S.settings.game.enabled?`<button class="btn" data-act="recap">Week recap</button>`:''}<button class="btn" data-go="import">Import CSV</button><button class="btn pri" data-go="trades">Log a trade</button></div></div>${filterBar()}${motivation()}${showRecapCard()}${G?discHTML(G):''}${body}`;
-  bindFilters();bindRor();bindRecap();if(G)checkNewAch(G);
-  if(ts.length){drawDash(A)}
+  m.innerHTML=`<div class="head"><h1>Analytics</h1><div class="row">${S.settings.game.enabled?`<button class="btn" data-act="recap">Week recap</button><button class="btn" data-act="ach">Achievements</button>`:''}</div></div>${filterBar()}${noticeHTML('analytics')}${body}`;
+  bindFilters();bindRor();if(ts.length){const d=$('#daily');if(d)dailyBars(d,A.days.slice(-90))}
 }
 function drawDash(A){const e=$('#eq'),d=$('#daily');if(e)equityChart(e,A);if(d)dailyBars(d,A.days.slice(-90))}
 function mistakesHTML(ts,A){
@@ -1166,7 +1258,7 @@ function vJournal(m){
   const dayP=new Map();S.trades.forEach(t=>dayP.set(t.date,(dayP.get(t.date)||0)+t.pnl));
   const j=S.journal[d]||{};const ts=S.trades.filter(t=>t.date===d).sort(byDT);const net=ts.reduce((s,t)=>s+t.pnl,0);
   const rules=S.settings.rules;const done=rules.filter(r=>j.rules?.[r]).length;
-  m.innerHTML=`<div class="head"><h1>Journal</h1><div class="row"><input type="date" id="j-date" value="${esc(d)}" aria-label="Journal date"><button class="btn" data-act="j-today">Today</button></div></div>
+  m.innerHTML=`<div class="head"><h1>Journal</h1><div class="row"><button class="btn" data-go="gallery">All screenshots</button><input type="date" id="j-date" value="${esc(d)}" aria-label="Journal date"><button class="btn" data-act="j-today">Today</button></div></div>
   <div class="jgrid"><div class="jlist" aria-label="Journal days">${list.map(x=>{const p=dayP.get(x);const has=S.journal[x]&&(S.journal[x].plan||S.journal[x].review||S.journal[x].lessons);
     return `<button data-jd="${x}" class="${x===d?'on':''}"><span>${esc(fmtDateShort(x))}${has?' <span style="color:var(--accent)">✎</span>':''}</span>${p!=null?`<b class="${cls(p)}">${moneyShort(p)}</b>`:''}</button>`}).join('')}</div>
   <div class="stack">
@@ -1716,13 +1808,13 @@ function installSection(){
   return `<section class="panel" id="install-panel"><h2>Install as an app</h2><p class="muted small">Opens in its own window with a dock or home-screen icon, and works offline. Same journal, same data.</p>
    <div class="row"><button class="btn pri" data-act="install">Install Ledger</button></div></section>`}
 if('serviceWorker' in navigator&&location.protocol!=='file:'){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{})})}
-const HASH_VIEWS=['dashboard','trades','journal','gallery','import','settings'];
+const HASH_VIEWS=['dashboard','analytics','trades','journal','gallery','import','settings'];
 window.addEventListener('hashchange',()=>{const v=location.hash.slice(1);if(HASH_VIEWS.includes(v)&&v!==S.view)go(v)});
 
 /* ================= router & global events ================= */
-const VIEWS={dashboard:vDash,trades:vTrades,journal:vJournal,gallery:vGallery,import:vImport,settings:vSettings};
+const VIEWS={dashboard:vDash,analytics:vAnalytics,trades:vTrades,journal:vJournal,gallery:vGallery,import:vImport,settings:vSettings};
 function render(keep){const y=window.scrollY;$$('nav [data-view]').forEach(b=>{b.classList.toggle('on',b.dataset.view===S.view);b.setAttribute('aria-current',b.dataset.view===S.view?'page':'false')});
-  VIEWS[S.view]($('#main'));if(fsSupported()&&S.view!=='settings'){const b=FS.state==='paused'?fsBanner():FS.state==='behind'?behindBanner():(FS.state==='off'&&S.view==='dashboard'&&Date.now()>(S.fsNudge||0))?nudgeBanner():'';if(b){const hd=$('#main .head');hd?hd.insertAdjacentHTML('afterend',b):$('#main').insertAdjacentHTML('afterbegin',b)}}updateFsStatus();if(keep)window.scrollTo(0,y);else window.scrollTo(0,0)}
+  VIEWS[S.view]($('#main'));if(fsSupported()&&!['settings','dashboard','analytics'].includes(S.view)){const b=noticeHTML(S.view);if(b){const hd=$('#main .head');hd?hd.insertAdjacentHTML('afterend',b):$('#main').insertAdjacentHTML('afterbegin',b)}}updateFsStatus();if(keep)window.scrollTo(0,y);else window.scrollTo(0,0)}
 function go(v){S.view=v;S.selected.clear();render()}
 const ACT={
   'range':a=>{S.filter.range=a.dataset.v;render(true)},
@@ -1788,7 +1880,7 @@ document.addEventListener('paste',async e=>{
   if(S.view==='journal'){await addImages(files,{date:S.jDate});renderThumbs('#j-thumbs',S.images.filter(i=>i.date===S.jDate));return}
   await addImages(files,{date:todayStr(),auto:true});if(S.view==='gallery')render(true);else toast('Pasted screenshot saved to Screenshots')});
 window.addEventListener('dragover',e=>e.preventDefault());window.addEventListener('drop',e=>e.preventDefault());
-let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(S.view==='dashboard'&&S.trades.length){const ts=filtered();if(ts.length)drawDash(analyze(ts,baseFor()))}},150)});
+let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if((S.view==='dashboard'||S.view==='analytics')&&S.trades.length){const ts=filtered();if(ts.length)drawDash(analyze(ts,baseFor()))}},150)});
 
 /* ================= init ================= */
 (async function init(){
