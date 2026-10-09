@@ -166,6 +166,7 @@ b{white-space:nowrap}
 .badge.on{opacity:1;border-color:color-mix(in srgb,var(--accent) 55%,var(--line));background:color-mix(in srgb,var(--accent) 8%,transparent)}
 .badge .bt{font-weight:700;margin-bottom:2px}
 @media (max-width:820px){.disc-grid{grid-template-columns:1fr}.disc-score,.disc-streaks{border-right:0;border-bottom:1px solid var(--line)}.disc-streaks{grid-template-columns:repeat(3,minmax(0,1fr))}.disc .v{font-size:18px}}
+.goal{padding:14px 16px;border-radius:var(--r);background:color-mix(in srgb,var(--accent) 8%,var(--surface));border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line))}
 .meter{height:8px;border-radius:4px;background:color-mix(in srgb,var(--bg) 60%,var(--surface));overflow:hidden;margin:4px 0 2px}
 .meter > i{display:block;height:100%;border-radius:4px}
 
@@ -364,6 +365,7 @@ const DEFAULT_SETTINGS={
   motivation:{enabled:true,lossStreak:2,redDays:2,ddMin:0,ddBase:'start',rule:'Half size. A+ setups only. Stop after two losses.',custom:[]},
   ror:{ruin:null,target:null,unit:'trade'},
   game:{enabled:true,maxTrades:3,maxLoss:null,sizeTol:1.5},
+  goal:{amount:1000000,metric:'capital'},
 };
 const S={trades:[],instruments:[],accounts:[],journal:{},settings:null,mappings:{},imports:[],images:[],weekly:{},
   view:'dashboard',filter:{range:'all',from:'',to:'',account:'',symbol:'',setup:'',market:''},
@@ -373,7 +375,7 @@ const saveTimers={};
 function bumpRev(){S.rev=(S.rev||0)+1;kvSet('rev',S.rev).catch(()=>{})}
 function save(k){bumpRev();clearTimeout(saveTimers[k]);saveTimers[k]=setTimeout(()=>{kvSet(k,S[k]).catch(e=>toast('Could not save: '+e.message,'err'));scheduleSync()},120)}
 function mergeDefaults(s){const o=JSON.parse(JSON.stringify(DEFAULT_SETTINGS));if(!s)return o;
-  for(const k in s){if(k==='theme'||k==='motivation'||k==='ror'||k==='game')o[k]={...o[k],...s[k]};else o[k]=s[k]}return o}
+  for(const k in s){if(k==='theme'||k==='motivation'||k==='ror'||k==='game'||k==='goal')o[k]={...o[k],...s[k]};else o[k]=s[k]}return o}
 
 /* ================= theme ================= */
 function lum(hex){const h=hex.replace('#','');const v=[0,2,4].map(i=>parseInt(h.substr(i,2),16)/255).map(c=>c<=.03928?c/12.92:Math.pow((c+.055)/1.055,2.4));return .2126*v[0]+.7152*v[1]+.0722*v[2]}
@@ -677,8 +679,25 @@ function accountsOverview(){
   const money=(n,sign=true)=>{if(n==null||!isFinite(n))return '–';const s=Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});return (n<0?'−':(sign&&n>0?'+':''))+cur()+s};
   const pc=(v,base)=>base?`${v>=0?'+':'−'}${Math.abs(v/base*100).toFixed(2)}%`:'–';
   const bar=(v,base)=>{const w=Math.min(100,Math.abs(v/base*100)/ (Math.max(...rows.map(r=>Math.abs(r.st.earned/r.st.start*100)),0.01))*100);return `<span class="trk" style="display:inline-block;width:80px;height:8px;position:relative;background:color-mix(in srgb,var(--bg) 60%,var(--surface));border-radius:3px;vertical-align:middle"><span style="position:absolute;top:0;bottom:0;left:0;width:${w}%;background:var(${v>=0?'--win':'--loss'});border-radius:3px"></span></span>`};
-  const sel=S.filter.account;
-  return `<section class="panel"><div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">Accounts</h2><span class="muted small">Combined % is total profit ÷ total account size, so bigger accounts count for more.</span></div>
+  const sel=S.filter.account;const g=S.settings.goal||{amount:1000000,metric:'capital'};
+  const withRoom=rows.filter(r=>r.st.room!=null);const roomSum=withRoom.reduce((s,r)=>s+r.st.room,0);
+  const tight=withRoom.length?withRoom.reduce((a,b)=>(b.st.room/b.st.mdd)<(a.st.room/a.st.mdd)?b:a):null;
+  const gv=g.metric==='profit'?T.earned:g.metric==='payouts'?T.pay:T.size;const gp=g.amount>0?Math.max(0,gv/g.amount):0;
+  const gLabel={capital:'total capital',profit:'total profit',payouts:'total paid out'}[g.metric]||'total capital';
+  const big=(k,v,s,c='')=>`<div><div class="k">${k}</div><div class="v ${c}">${v}</div><div class="s">${s||'&nbsp;'}</div></div>`;
+  return `<section class="panel"><div class="row" style="justify-content:space-between;margin-bottom:12px"><h2 style="margin:0">Portfolio</h2><span class="muted small">${plural(rows.length,'account')}. Combined % is total profit ÷ total capital, so bigger accounts count for more.</span></div>
+  ${g.amount>0?`<div class="goal"><div class="row" style="justify-content:space-between;align-items:baseline"><div><span class="muted small">Goal</span> <b style="font-size:18px">${money(g.amount,false)}</b> <span class="muted small">in ${gLabel}</span></div><div><b style="font-size:22px;font-stretch:115%">${(Math.floor(gp*1000)/10).toFixed(1)}%</b> <span class="muted small">${money(Math.max(0,g.amount-gv),false)} to go</span></div></div>
+    <div class="meter" style="height:12px;margin-top:8px"><i style="width:${Math.min(100,gp*100)}%;background:var(--accent)"></i></div></div>`:''}
+  <div class="ledger" style="margin:14px 0">
+    ${big('Total capital',money(T.size,false),`Balance ${money(T.bal,false)}`)}
+    ${big('Total profit',money(T.earned),`<b class="${cls(T.earned)}">${pc(T.earned,T.size)}</b> on capital`,cls(T.earned))}
+    ${big('Paid out',money(T.pay,false),T.pay?`${pct(T.pay/Math.max(T.earned,T.pay))} of profit banked`:'Add payouts in Settings')}
+    ${big('Today',T.today?money(T.today):'–',T.today?`${pc(T.today,T.size)} on capital`:'No trades yet today',cls(T.today))}
+    ${big('Room to max drawdown',withRoom.length?money(roomSum,false):'–',tight?`Tightest: ${esc(tight.a.name)} ${money(tight.st.room,false)}`:'Set max drawdown per account',tight&&tight.st.room<tight.st.mdd*.3?'neg':'')}
+    ${big('Average account',money(T.size/rows.length,false),`Profit per account ${money(T.earned/rows.length)}`)}
+    ${big('Best account',(()=>{const b=rows.reduce((a,c)=>c.st.earned/c.st.start>a.st.earned/a.st.start?c:a);return esc(b.a.name)})(),(()=>{const b=rows.reduce((a,c)=>c.st.earned/c.st.start>a.st.earned/a.st.start?c:a);return pc(b.st.earned,b.st.start)})())}
+    ${big('Worst account',(()=>{const b=rows.reduce((a,c)=>c.st.earned/c.st.start<a.st.earned/a.st.start?c:a);return esc(b.a.name)})(),(()=>{const b=rows.reduce((a,c)=>c.st.earned/c.st.start<a.st.earned/a.st.start?c:a);return pc(b.st.earned,b.st.start)})())}
+  </div>
   <div class="tblwrap"><table class="tbl acct-tbl"><thead><tr><th>Account</th><th class="r hide-m">Size</th><th class="r hide-m">Balance</th><th class="r">Profit</th><th class="r">Return</th><th class="hide-m"></th><th class="r">Today</th><th class="r hide-m">Room to max DD</th></tr></thead><tbody>
   ${rows.map(({a,st})=>`<tr class="click" data-act="pick-acct" data-n="${esc(a.name)}" ${sel===a.name?'style="box-shadow:inset 3px 0 0 var(--accent)"':''}><td><b>${esc(a.name)}</b>${a.firm?` <span class="muted small">${esc(a.firm)}</span>`:''}</td><td class="r hide-m">${money(st.start,false)}</td><td class="r hide-m">${money(st.bal,false)}</td>
     <td class="r ${cls(st.earned)}">${money(st.earned)}${st.pay?`<div class="muted small hide-m">incl. ${money(st.pay,false)} paid out</div>`:''}</td><td class="r ${cls(st.earned)}"><b>${pc(st.earned,st.start)}</b></td><td class="hide-m">${bar(st.earned,st.start)}</td>
@@ -1508,6 +1527,9 @@ function vSettings(m){
   <section class="panel"><h2>Appearance</h2><div class="presets" style="margin-bottom:14px">${Object.entries(THEMES).map(([n,t])=>`<button class="preset" data-act="theme" data-n="${n}"><span style="background:${t.bg};border:1px solid ${t.line}"></span><span style="background:${t.accent}"></span>${n}</button>`).join('')}</div>
    <div class="swatches">${[['bg','Background'],['surface','Panels'],['line','Borders'],['text','Text'],['muted','Secondary text'],['accent','Accent'],['win','Profit'],['loss','Loss']].map(([k,l])=>`<label class="swatch"><input type="color" data-tk="${k}" value="${th[k]}" aria-label="${l}"><span class="small">${l}</span></label>`).join('')}</div></section>
 
+  <section class="panel"><h2>Portfolio goal</h2><p class="muted small">Shown as a progress bar on the dashboard.</p>
+   <div class="fgrid"><label class="f">Goal amount (${esc(cur())})<input type="number" min="0" step="any" data-goal="amount" value="${st.goal?.amount??''}"></label>
+   <label class="f w2">Measured by<select data-goal="metric">${[['capital','Total capital (sum of account sizes)'],['profit','Total profit across accounts'],['payouts','Total paid out']].map(([v,l])=>`<option value="${v}" ${(st.goal?.metric||'capital')===v?'selected':''}>${l}</option>`).join('')}</select></label></div></section>
   <section class="panel"><h2>Discipline score</h2><p class="muted small">Each trading day is scored 0–100 on process, never profit: entries in your kill zones, respecting your daily max loss, trade count, size, mistake tags, journaling and your rules checklist. If you copy trades across accounts, identical entries count once and the max loss is checked per account.</p>
    <div class="row" style="margin:10px 0"><label class="check"><input type="checkbox" data-gm="enabled" ${st.game.enabled?'checked':''}>Show score, streaks, ranks and achievements</label></div>
    <div class="fgrid"><label class="f">Max trades per day<input type="number" min="0" data-gm="maxTrades" value="${st.game.maxTrades??''}"></label>
@@ -1555,6 +1577,7 @@ function vSettings(m){
   $$('[data-tk]').forEach(el=>el.oninput=()=>{st.theme[el.dataset.tk]=el.value;applyTheme();save('settings')});
   $$('[data-list]').forEach(el=>el.onchange=()=>{st[el.dataset.list]=el.value.split('\n').map(s=>s.trim()).filter(Boolean);save('settings')});
   $$('[data-ses]').forEach(el=>el.onchange=()=>{st.sessions[+el.dataset.ses][el.dataset.k]=el.type==='checkbox'?el.checked:el.value;recomputeAll();save('settings')});
+  $$('[data-goal]').forEach(el=>el.onchange=()=>{st.goal=st.goal||{};st.goal[el.dataset.goal]=el.dataset.goal==='amount'?(num(el.value)||0):el.value;save('settings')});
   $$('[data-gm]').forEach(el=>el.onchange=()=>{const k=el.dataset.gm;st.game[k]=el.type==='checkbox'?el.checked:num(el.value);save('settings')});
   $$('[data-mo]').forEach(el=>el.onchange=()=>{const k=el.dataset.mo;mo[k]=el.type==='checkbox'?el.checked:k==='custom'?el.value.split('\n').map(s=>s.trim()).filter(Boolean):['lossStreak','redDays','ddMin'].includes(k)?(num(el.value)||0):el.value;save('settings')});
   $('#s-cur').onchange=e=>{st.currency=e.target.value||'$';save('settings')};
