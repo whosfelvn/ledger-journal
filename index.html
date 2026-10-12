@@ -344,7 +344,11 @@ h2{font-size:15px;font-weight:600;color:var(--text)}
   .disc2 > .btn{grid-column:1/-1;justify-self:start}
   .panel{padding:16px}
   .filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-  .filters .seg{grid-column:1/-1}
+  .filters .seg{grid-column:1/-1;display:grid;grid-template-columns:repeat(6,minmax(0,1fr))}
+  .filters .seg button{padding:7px 1px;font-size:12px}
+  nav.side{overflow-x:hidden}
+  nav.side button{flex:1 1 0;min-width:0;padding:6px 2px}
+  nav.side button .lbl,nav.side button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .filters select{max-width:none;width:100%}
   .cal .d span:nth-child(2){display:none}
   .cal .d b{font-size:10px}
@@ -741,7 +745,7 @@ function motivation(){
 /* ================= prop accounts ================= */
 function propPanel(){
   const accs=S.accounts.filter(a=>+a.start>0);if(!accs.length)return '';const today=todayStr();
-  const cards=accs.map(a=>{const ts=S.trades.filter(t=>t.account===a.name).sort(byDT);const st=acctState(a);const start=st.start,bal=st.bal,mdd=st.mdd,floor=st.floor,room=st.room;const prior=+a.prior||0;const todayP=ts.filter(t=>t.date===today).reduce((s,t)=>s+t.pnl,0);
+  const cards=accs.map(a=>{const ts=S.trades.filter(t=>t.account===a.name).sort(byDT);const st=acctState(a);const start=st.start,bal=st.bal,mdd=st.mdd,floor=st.floor,room=st.room;const prior=priorOf(a);const todayP=ts.filter(t=>t.date===today).reduce((s,t)=>s+t.pnl,0);
     const dl=+a.daily||0;const dRoom=dl?dl+todayP:null;const tgt=+a.target||0;const prog=tgt?(bal-start)/tgt:null;
     const meter=(v,maxv,col)=>`<div class="meter"><i style="width:${Math.max(0,Math.min(100,v/maxv*100))}%;background:${col}"></i></div>`;
     const ddCol=room!=null&&room<mdd*.3?'var(--loss)':'var(--win)';
@@ -913,7 +917,12 @@ function calendarHTML(A){
 
 
 /* ================= risk of ruin ================= */
-function acctPrior(a){const start=+a.start||0,prior=+a.prior||0;const peakBal=a.peakBal!=null&&a.peakBal!==''?+a.peakBal:start+Math.max(prior,0);return{start,prior,peakBal:Math.max(peakBal,start+prior)}}
+function tradeMs(t){const tm=t.exitTime||t.time;return tm?new Date(`${t.date}T${tm}`).getTime():null}
+function priorOf(a){if(a.syncAt==null||a.syncX==null)return +a.prior||0;const sd=ymd(new Date(a.syncAt));
+  const jn=S.trades.filter(t=>t.account===a.name&&(()=>{const ms=tradeMs(t);return ms!=null?ms<=a.syncAt:t.date<sd})()).reduce((s,t)=>s+t.pnl,0);
+  return round2(a.syncX-(+a.start||0)-jn)}
+function setSync(a,x,at){a.syncX=round2(x);a.syncAt=at;a.prior=priorOf(a)}
+function acctPrior(a){const start=+a.start||0,prior=priorOf(a);const peakBal=a.peakBal!=null&&a.peakBal!==''?+a.peakBal:start+Math.max(prior,0);return{start,prior,peakBal:Math.max(peakBal,start+prior)}}
 function acctState(a){const ts=S.trades.filter(t=>t.account===a.name).sort(byDT);const P=acctPrior(a);const start=P.start,pay=+a.payouts||0;let bal=start+P.prior-pay,peak=Math.max(P.peakBal-pay,bal);
   for(const t of ts){bal+=t.pnl;peak=Math.max(peak,bal)}const mdd=+a.maxDD||0;let floor=null;
   if(mdd)floor=a.ddType==='trailing'?(a.lock!==false?Math.min(peak-mdd,start):peak-mdd):start-mdd;
@@ -1550,17 +1559,20 @@ function buildRoundTrips(fills,stops){
       if(t.dir>0?e.price<best.pr-1e-9:e.price>best.pr+1e-9)moved=moved==null?e.price:(t.dir>0?Math.min(moved,e.price):Math.max(moved,e.price))}}
     return{rawSym:t.sym,side:t.dir>0?'Long':'Short',qty,entry:+entry.toFixed(6),exit:+exit.toFixed(6),t0:t.t0,t1:t.t1,stop:best?best.pr:null,moved,scaled:t.ent.length>1||t.ex.length>1}})}}
 async function fillsStart(files){
-  const items=[];const skipped=[];
+  const items=[];const skipped=[];const empties=[];
   for(const f of files){if(!/\.(csv|txt)$/i.test(f.name)){skipped.push(f.name);continue}
-    const {headers,rows}=csvObjects(await readFileText(f));const kind=fileKind(headers);
+    const text=await readFileText(f);if(!text.trim()){empties.push(f.name);continue}
+    const {headers,rows}=csvObjects(text);const kind=fileKind(headers);
     if(!kind){skipped.push(f.name);continue}if(kind==='positions')continue;items.push({name:f.name,kind,rows,stamp:fileStamp(f.name)})}
-  if(!items.some(i=>i.kind==='orders'||i.kind==='notifs'))return false;
+  const emptyOrders=empties.filter(n=>/orders|notification/i.test(n));
+  if(!items.some(i=>i.kind==='orders'||i.kind==='notifs')){
+    if(!items.some(i=>i.kind==='account')){if(empties.length){toast(`${empties.length===1?'That file is':'Those files are'} empty, so there's nothing to import. Export again from TradingView.`,'err');return true}return false}}
   items.sort((a,b)=>(a.stamp??Infinity)-(b.stamp??Infinity));const groups=[];
   for(const it of items){const g=groups[groups.length-1];
     if(g&&it.stamp!=null&&g.stamp!=null&&it.stamp-g.last<3000){g.items.push(it);g.last=it.stamp}
     else groups.push({stamp:it.stamp,last:it.stamp,items:[it]})}
   S.fills={groups:groups.map(g=>{const p=parseGroup(g.items);const r=buildRoundTrips(p.fills,p.stops);
-    return{stamp:g.stamp,files:g.items.map(i=>i.name),acct:p.acct,trades:r.trades,open:r.open,account:'',nFills:p.fills.length}})};
+    return{stamp:g.stamp,files:g.items.map(i=>i.name),acct:p.acct,trades:r.trades,open:r.open,account:'',nFills:p.fills.length}}),empty:emptyOrders};
   const used=new Set();for(const g of S.fills.groups){if(!g.acct||g.acct.netLiq==null)continue;let best=null;
     for(const a of S.accounts){if(!(+a.start>0)||used.has(a.name))continue;const d=Math.abs(acctState(a).bal-g.acct.netLiq);if(d<=a.start*0.05&&(!best||d<best.d))best={a,d}}
     if(best){g.account=best.a.name;g.size=+best.a.start;g.guessed=true;used.add(best.a.name)}}
@@ -1582,7 +1594,10 @@ function fillsItems(){const existing=new Set(S.trades.map(t=>t.importKey).filter
 function fillsHTML(){
   const G=fillsItems();let ready=0;G.flat().forEach(i=>{if(i.status==='ok'||i.status==='warn')ready++});
   const need=[...new Set(G.flat().filter(i=>!i.t.known).map(i=>matchInst(i.x.rawSym,presetObjs())).filter(s=>s&&!instOf(s)))];
-  return `<section class="panel"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Orders matched into trades</h2><span class="muted small">Entries and exits are paired up. Your first stop on each trade sets its R, and a stop moved further away is tagged as a mistake.</span></div>
+  const nT=S.fills.groups.reduce((s,g)=>s+g.trades.length,0);
+  const emptyNote=S.fills.empty&&S.fills.empty.length?`<div class="motive" style="margin:12px 0 0;grid-template-columns:1fr"><div><b>${S.fills.empty.length===1?'1 file was':S.fills.empty.length+' files were'} empty</b><p class="small" style="margin:4px 0 0">TradingView saved ${esc(S.fills.empty.map(n=>/notification/i.test(n)?'Notifications log':'Orders').join(' and '))} with nothing in ${S.fills.empty.length===1?'it':'them'}${nT?'':', so there are no trades to add'}. Check the Orders tab in TradingView shows your trades, then export again.${nT?'':' You can still update the balance below.'}</p></div></div>`:'';
+  return `<section class="panel"><div class="row" style="justify-content:space-between"><h2 style="margin:0">${nT?'Orders matched into trades':'Nothing to import'}</h2>${nT?'<span class="muted small">Entries and exits are paired up. Your first stop on each trade sets its R, and a stop moved further away is tagged as a mistake.</span>':''}</div>
+  ${emptyNote}
   ${need.length?`<div class="row" style="margin-top:12px"><span class="small">Add these contracts first:</span>${need.map(s=>`<button class="btn sm pri" data-act="i-addpreset" data-s="${s}">Add ${s}</button>`).join('')}</div>`:''}
   <datalist id="dl-accts">${accountNames().map(a=>`<option value="${esc(a)}">`).join('')}</datalist>
   ${S.fills.groups.map((g,gi)=>{const it=G[gi];const sumNet=it.reduce((s,i)=>s+i.t.pnl,0),sumGross=it.reduce((s,i)=>s+i.t.gross,0),cts=it.reduce((s,i)=>s+i.t.qty,0);
@@ -1611,8 +1626,7 @@ function fillsGo(){
   let synced=0;
   for(const g of S.fills.groups){if(!g.account||!g.acct||g.acct.netLiq==null)continue;const size=g.size??guessSize(g.acct.netLiq);
     let a=S.accounts.find(x=>x.name===g.account);if(!a){a={id:uid(),name:g.account,firm:'',start:size,daily:null,maxDD:null,ddType:'trailing',lock:true,target:null};S.accounts.push(a)}
-    if(!(+a.start>0))a.start=size;const jn=S.trades.filter(t=>t.account===a.name).reduce((s,t)=>s+t.pnl,0);
-    a.prior=round2(g.acct.netLiq-(g.acct.openPL||0)-(+a.start)-jn+(+a.payouts||0));synced++}
+    if(!(+a.start>0))a.start=size;setSync(a,g.acct.netLiq-(g.acct.openPL||0)+(+a.payouts||0),g.stamp??Date.now());synced++}
   if(synced)save('accounts');
   if(!n){if(synced){S.fills=null;toast(`Balances updated for ${plural(synced,'account')}`);S.view='dashboard';render()}return}
   S.imports.unshift({id:batch,file:`Tradovate orders (${S.fills.groups.length} export${S.fills.groups.length>1?'s':''})`,count:n,at:Date.now()});
@@ -1706,10 +1720,10 @@ function vSettings(m){
     recomputeAll();save('instruments');save('trades');render(true)});
   $$('[data-acc]').forEach(el=>el.onchange=()=>{const a=S.accounts[+el.dataset.acc];const k=el.dataset.k;const old=a.name;
     if(k==='curBal'){const cb=num(el.value);if(cb==null||!(+a.start>0)){toast('Set the start balance first','err');return}
-      const jn=S.trades.filter(t=>t.account===a.name).reduce((s,t)=>s+t.pnl,0);a.prior=round2(cb-(+a.start)-jn+(+a.payouts||0));save('accounts');toast(`${a.name}: ${money(a.prior)} from before the journal`);render(true);return}
+      setSync(a,cb+(+a.payouts||0),Date.now());save('accounts');toast(`${a.name}: ${money(a.prior)} from before the journal`);render(true);return}
     const oldPay=+a.payouts||0;
     a[k]=el.type==='checkbox'?el.checked:['start','daily','maxDD','target','peakBal','payouts'].includes(k)?num(el.value):el.value.trim();
-    if(k==='payouts'&&a.prior!=null&&a.prior!==''){a.prior=round2((+a.prior)+((+a.payouts||0)-oldPay))}
+    if(k==='payouts'&&a.prior!=null&&a.prior!==''){if(a.syncX!=null){a.syncX=round2(a.syncX+((+a.payouts||0)-oldPay));a.prior=priorOf(a)}else a.prior=round2((+a.prior)+((+a.payouts||0)-oldPay))}
     if(k==='name'&&old&&old!==a.name){S.trades.forEach(t=>{if(t.account===old)t.account=a.name});save('trades')}save('accounts')});
   $$('[data-tk]').forEach(el=>el.oninput=()=>{st.theme[el.dataset.tk]=el.value;applyTheme();save('settings')});
   $$('[data-list]').forEach(el=>el.onchange=()=>{st[el.dataset.list]=el.value.split('\n').map(s=>s.trim()).filter(Boolean);save('settings')});
