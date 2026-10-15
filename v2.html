@@ -2141,7 +2141,7 @@ function vDash(m){
     <section class="sheet" id="calp">${calendarHTML(A)}</section>
     <div class="stack">
       ${accs.length?`<section class="sheet"><div class="sec-h"><h2>Accounts</h2><button class="linkbtn" data-go="accounts">Details</button></div>${acctListHTML(4)}
-        ${P.n||P.ne?`<div class="rule" style="border-top:1px solid var(--line);margin:14px 0 12px"></div><div class="row" style="justify-content:space-between"><span class="muted small">Paid out, net of costs</span><button class="linkbtn fig ${cls(P.net)}" data-go="payouts" style="font-size:17px">${money(P.net)}</button></div>`:''}</section>`:''}
+        <div class="rule" style="border-top:1px solid var(--line);margin:14px 0 12px"></div><div class="row" style="justify-content:space-between"><span class="muted small">Payouts${P.n?`, net of costs`:''}</span>${P.n||P.ne?`<button class="linkbtn fig ${cls(P.net)}" data-go="payouts" style="font-size:17px">${money(P.net)}</button>`:'<button class="linkbtn" data-go="payouts">Log a payout</button>'}</div></section>`:''}
       ${G&&G.days.length?`<section class="sheet"><div class="sec-h"><h2>Discipline</h2><button class="linkbtn" data-act="ach">Achievements ${G.unlocked.length}/${G.ach.length}</button></div>
         <div class="dmini"><button class="sc ${gradeCls(G.last.score)}" data-act="open-day" data-d="${G.last.date}" title="See the breakdown">${G.last.score}<span>${gradeOf(G.last.score)}</span></button>
         <div class="small"><div>Score for ${esc(fmtDateShort(G.last.date))}</div><div class="muted">${plural(G.disc.cur,'disciplined day')} in a row. Rank ${esc(G.rank)}${G.next?`, ${G.next[1]-G.pts} points to ${esc(G.next[0])}`:''}.</div>${G.mow?`<div>Mistake of the week: <b>${esc(G.mow.tag)}</b>, ${G.mow.now} so far</div>`:''}</div></div></section>`:''}
@@ -2239,7 +2239,7 @@ function vAnalytics(m){
 /* ---------- Accounts ---------- */
 function vAccounts(m){
   const tab=S.aTab||'bal';
-  const head=`<div class="head"><div><h1>Accounts</h1></div><div class="row"><button class="btn" data-act="edit-accounts">Edit accounts</button></div></div>
+  const head=`<div class="head"><div><h1>Accounts</h1></div><div class="row"><button class="btn" data-act="edit-accounts">Edit accounts</button>${tab==='pay'?'':'<button class="btn pri" data-act="a-tab" data-v="pay">Log a payout</button>'}</div></div>
     <div class="subtabs"><button data-act="a-tab" data-v="bal" class="${tab==='bal'?'on':''}">Balances</button><button data-act="a-tab" data-v="pay" class="${tab==='pay'?'on':''}">Payouts</button></div>`;
   if(tab==='pay'){m.innerHTML=head+'<div id="pay-host"></div>';vPayouts($('#pay-host'));return}
   const accs=S.accounts.filter(a=>+a.start>0);
@@ -2267,7 +2267,7 @@ function vAccounts(m){
 
 /* ---------- More (phone) ---------- */
 function openMore(){showModal(`<div class="mhead"><h2>More</h2><button class="x" data-act="close" aria-label="Close">×</button></div><div class="more-sheet">
-  ${[['analytics','Stats',ICON.stats],['accounts','Accounts and payouts',ICON.acct],['import','Import a file',ICON.imp],['gallery','Screenshots',ICON.pic],['settings','Settings',ICON.gear]].map(([v,l,ic])=>`<button data-go="${v}">${ic}${l}</button>`).join('')}</div>`)}
+  ${[['analytics','Stats',ICON.stats],['accounts','Accounts',ICON.acct],['payouts','Payouts',ICON.acct],['import','Import a file',ICON.imp],['gallery','Screenshots',ICON.pic],['settings','Settings',ICON.gear]].map(([v,l,ic])=>`<button data-go="${v}">${ic}${l}</button>`).join('')}</div>`)}
 
 /* ================= router & global events ================= */
 const VIEWS={dashboard:vDash,analytics:vAnalytics,trades:vTrades,journal:vJournal,accounts:vAccounts,import:vImport,settings:vSettings};
